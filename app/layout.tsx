@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lemari Coffee",
-  description: "Lemari Coffee application",
+  title: "Lemari Coffee — Single-Origin Indonesian Coffee, Tokyo",
+  description:
+    "Single-origin Indonesian coffee, roasted in small batches in Nakameguro, Tokyo. A cupboard full of islands.",
 };
 
 export default function RootLayout({
@@ -12,8 +13,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className="scroll-smooth">
+      <body className="bg-[#F6EDDC] text-[#241A12] antialiased selection:bg-[#CE522A] selection:text-[#FCF7ED] font-sans">
+        {children}
+      </body>
     </html>
   );
 }
