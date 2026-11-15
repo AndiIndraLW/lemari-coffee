@@ -4,7 +4,12 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Lemari Coffee — Single-Origin Indonesian Coffee, Tokyo",
   description:
-    "Single-origin Indonesian coffee, roasted in small batches in Nakameguro, Tokyo. A cupboard full of islands.",
+    "Single-origin Indonesian coffee, roasted in small batches in Jingumae, Shibuya, Tokyo. A cupboard full of islands.",
+  icons: {
+    icon: "/assets/logo.png",
+    shortcut: "/assets/logo.png",
+    apple: "/assets/logo.png",
+  },
 };
 
 export default function RootLayout({

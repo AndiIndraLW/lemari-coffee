@@ -3,40 +3,22 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 
-interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  priceFormatted: string;
-  qty: number;
-  image: string;
-  detail?: string;
-}
-
 export default function Home() {
   const [lang, setLang] = useState<"EN" | "JP">("JP");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [cartNotification, setCartNotification] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
   const [menuFilter, setMenuFilter] = useState<"all" | "coffee" | "kitchen">("all");
-  const [isVisitModalOpen, setIsVisitModalOpen] = useState(false);
-  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isOpenHourModalOpen, setIsOpenHourModalOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => new Date());
 
-  // Auto clear toast notification
+  // Handle escape key and body scroll lock for modal
   useEffect(() => {
-    if (cartNotification) {
-      const timer = setTimeout(() => setCartNotification(null), 3200);
-      return () => clearTimeout(timer);
-    }
-  }, [cartNotification]);
-
-  // Handle escape key and body scroll lock for modals/drawer
-  useEffect(() => {
-    const isAnyModalOpen = isCartOpen || isVisitModalOpen || isCheckoutModalOpen;
-    if (isAnyModalOpen) {
+    if (isOpenHourModalOpen) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -44,10 +26,8 @@ export default function Home() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setIsCartOpen(false);
-        setIsVisitModalOpen(false);
-        setIsCheckoutModalOpen(false);
         setMobileMenuOpen(false);
+        setIsOpenHourModalOpen(false);
       }
     };
 
@@ -56,42 +36,7 @@ export default function Home() {
       document.body.style.overflow = "";
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isCartOpen, isVisitModalOpen, isCheckoutModalOpen]);
-
-  const totalItemsCount = cart.reduce((acc, item) => acc + item.qty, 0);
-  const subtotal = cart.reduce((acc, item) => acc + item.price * item.qty, 0);
-  const freeShippingThreshold = 5000;
-  const freeShippingRemaining = Math.max(0, freeShippingThreshold - subtotal);
-
-  const handleAddToCart = (item: {
-    id: string;
-    name: string;
-    price: number;
-    priceFormatted: string;
-    image: string;
-    detail?: string;
-  }) => {
-    setCart((prev) => {
-      const existing = prev.find((i) => i.id === item.id);
-      if (existing) {
-        return prev.map((i) => (i.id === item.id ? { ...i, qty: i.qty + 1 } : i));
-      }
-      return [...prev, { ...item, qty: 1 }];
-    });
-    setCartNotification(
-      lang === "EN"
-        ? `Added ${item.name} (${item.priceFormatted}) to your bag.`
-        : `「${item.name}」(${item.priceFormatted}) をカートに追加しました。`
-    );
-  };
-
-  const updateCartQty = (id: string, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((i) => (i.id === id ? { ...i, qty: i.qty + delta } : i))
-        .filter((i) => i.qty > 0)
-    );
-  };
+  }, [isOpenHourModalOpen]);
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,6 +44,52 @@ export default function Home() {
       setNewsletterSubscribed(true);
       setEmail("");
     }
+  };
+
+  const monthNamesEN = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const monthNamesJP = [
+    "1月", "2月", "3月", "4月", "5月", "6月",
+    "7月", "8月", "9月", "10月", "11月", "12月"
+  ];
+  const weekDayNamesMondayEN = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+  const weekDayNamesMondayJP = ["月", "火", "水", "木", "金", "土", "日"];
+
+  const calendarYear = calendarMonth.getFullYear();
+  const calendarMonthIndex = calendarMonth.getMonth();
+  const daysInMonth = new Date(calendarYear, calendarMonthIndex + 1, 0).getDate();
+  const firstDayRaw = new Date(calendarYear, calendarMonthIndex, 1).getDay();
+  // Monday = 0, Tuesday = 1, ..., Sunday = 6
+  const firstDayOfWeekMonday = (firstDayRaw + 6) % 7;
+  const totalLeadingAndDays = firstDayOfWeekMonday + daysInMonth;
+  const trailingEmptyCount = (7 - (totalLeadingAndDays % 7)) % 7;
+
+  const isDateClosed = (date: Date): boolean => {
+    const y = date.getFullYear();
+    const m = date.getMonth(); // 10 = November
+    const d = date.getDate();
+    const dayOfWeek = date.getDay(); // 0 is Sunday, 1 is Monday
+
+    // Special schedule for November 2026 matching calendar design
+    if (y === 2026 && m === 10) {
+      if (d === 23) return false; // Open on Monday Nov 23 (Labor Thanksgiving Day holiday)
+      if (d === 24 || d === 25 || d === 26) return true; // Closed Nov 24, 25, 26
+      if (dayOfWeek === 1) return true; // Other Mondays closed
+      return false; // Other days open
+    }
+
+    // Default regular schedule: Mondays closed
+    return dayOfWeek === 1;
+  };
+
+  const handlePrevMonth = () => {
+    setCalendarMonth(new Date(calendarYear, calendarMonthIndex - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCalendarMonth(new Date(calendarYear, calendarMonthIndex + 1, 1));
   };
 
   const marqueeWords = [
@@ -114,27 +105,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full bg-[#F6EDDC] text-[#241A12] selection:bg-[#CE522A] selection:text-[#FCF7ED] flex flex-col items-center">
-      {/* Toast Notification */}
-      {cartNotification && (
-        <div className="fixed top-5 z-50 flex items-center gap-3 bg-[#241A12] text-[#F6EDDC] px-5 py-3 rounded-full shadow-2xl border border-white/10 text-xs md:text-sm font-medium transition-all animate-bounce">
-          <span className="w-2 h-2 rounded-full bg-[#CE522A] animate-ping" />
-          <span>{cartNotification}</span>
-          <button
-            onClick={() => setIsCartOpen(true)}
-            className="ml-2 underline text-[#F2C24E] hover:text-white"
-          >
-            {lang === "EN" ? "View Bag" : "カートを見る"}
-          </button>
-          <button
-            onClick={() => setCartNotification(null)}
-            className="ml-1 text-stone-400 hover:text-white text-base leading-none"
-            aria-label="Dismiss notification"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       {/* Main Container max 1440px */}
       <div className="w-full max-w-[1440px] flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.06)] bg-[#F6EDDC] overflow-hidden">
         
@@ -142,8 +112,15 @@ export default function Home() {
         <header className="sticky top-0 z-40 w-full h-[84px] md:h-[92px] px-5 sm:px-8 md:px-14 flex items-center justify-between bg-[#F6EDDC]/95 backdrop-blur-md border-b border-[#D8C7AC]/40 transition-colors">
           {/* Brand */}
           <a href="#" className="flex items-center gap-3 group">
-            <div className="w-[30px] h-[30px] bg-[#CE522A] rounded-[3px] flex items-center justify-center text-[#FCF7ED] font-serif font-semibold text-[17px] shadow-sm transition-transform group-hover:scale-105">
-              L
+            <div className="relative w-8 h-8 md:w-9 md:h-9 flex-shrink-0 transition-transform group-hover:scale-105">
+              <Image
+                src="/assets/logo.png"
+                alt="Lemari Coffee Logo"
+                fill
+                sizes="(max-width: 768px) 32px, 36px"
+                className="object-contain"
+                priority
+              />
             </div>
             <span className="font-serif text-[18px] md:text-[19px] font-medium tracking-[1.4px] text-[#241A12]">
               LEMARI COFFEE
@@ -152,11 +129,11 @@ export default function Home() {
 
           {/* Desktop Nav Links */}
           <nav className="hidden lg:flex items-center gap-7 xl:gap-8 text-[13px] text-[#6A5747] font-normal tracking-[0.6px]">
-            <a href="#philosophy" className="hover:text-[#CE522A] transition-colors">Philosophy</a>
-            <a href="#beans" className="hover:text-[#CE522A] transition-colors">Beans</a>
-            <a href="#menu" className="hover:text-[#CE522A] transition-colors">Menu</a>
-            <a href="#space" className="hover:text-[#CE522A] transition-colors">The Space</a>
-            <a href="#shop" className="hover:text-[#CE522A] transition-colors">Shop</a>
+            <a href="#philosophy" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Philosophy" : "コンセプト"}</a>
+            <a href="#beans" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Beans" : "珈琲豆"}</a>
+            <a href="#menu" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Menu" : "メニュー"}</a>
+            <a href="#space" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "The Space" : "空間"}</a>
+            <a href="#locator" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Location" : "店舗情報"}</a>
           </nav>
 
           {/* Nav Right */}
@@ -170,27 +147,18 @@ export default function Home() {
               {lang === "EN" ? "JP / EN" : "EN / JP"}
             </button>
 
-            {/* Visit Modal Trigger */}
-            <button
-              onClick={() => setIsVisitModalOpen(true)}
+            {/* Visit the café Link */}
+            <a
+              href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
+              target="_blank"
+              rel="noopener noreferrer"
               className="hidden sm:inline-flex items-center gap-2 bg-[#241A12] text-[#FCF7ED] px-4 md:px-5 py-2.5 rounded-full text-[12.5px] font-medium tracking-[0.6px] hover:bg-[#CE522A] active:scale-95 transition-all shadow-sm"
             >
               <span>{lang === "EN" ? "Visit the café" : "カフェへ行く"}</span>
               <svg viewBox="0 0 13 13" className="w-[12px] h-[12px] fill-current" aria-hidden="true">
                 <path d="M3.666 3.263q-.13 .038-.241 .143-.112 .104-.15 .234-.05 .181 .026 .365 .079 .181 .235 .273 .079 .026 .181 .038 .158 .013 .612 .026h3.561l-2.275 2.275q-1.533 1.533-1.911 1.924-.375 .39-.403 .441-.102 .222-.013 .432 .092 .206 .298 .298 .21 .089 .432-.013 .051-.028 .441-.403 .391-.378 1.924-1.91l2.275-2.276v2.053q0 2.067 .026 2.146 .025 .168 .142 .273 .185 .181 .429 .162 .247-.019 .39-.229l.026-.025q.041-.051 .054-.168 .012-.143 .025-.638v-4.993l-.038-.089q-.025-.104-.117-.196-.093-.093-.197-.118l-.089-.038h-2.796q-2.781 0-2.847 .013z" />
               </svg>
-            </button>
-
-            {/* Cart Button */}
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="flex items-center gap-1.5 bg-[#CE522A] text-[#FCF7ED] px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-sm hover:bg-[#b8431d] active:scale-95 transition-all"
-            >
-              <span>Bag</span>
-              <span className="bg-white/20 rounded-full px-1.5 py-0.5 text-[10px] min-w-[18px] text-center">
-                {totalItemsCount}
-              </span>
-            </button>
+            </a>
 
             {/* Mobile Menu Button */}
             <button
@@ -212,21 +180,20 @@ export default function Home() {
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
           <div className="lg:hidden w-full bg-[#F6EDDC] border-b border-[#D8C7AC] px-6 py-5 flex flex-col gap-4 text-[15px] font-medium transition-all">
-            <a href="#philosophy" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">Philosophy</a>
-            <a href="#beans" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">Beans & Origins</a>
-            <a href="#menu" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">Signature Menu</a>
-            <a href="#space" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">The Space</a>
-            <a href="#shop" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">Shop Merchandise</a>
-            <a href="#locator" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">Store Locations</a>
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                setIsVisitModalOpen(true);
-              }}
-              className="mt-2 w-full text-center bg-[#241A12] text-[#FCF7ED] py-2.5 rounded-full text-xs font-semibold"
+            <a href="#philosophy" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Philosophy" : "コンセプト"}</a>
+            <a href="#beans" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Beans & Origins" : "単一農園豆"}</a>
+            <a href="#menu" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Signature Menu" : "カフェメニュー"}</a>
+            <a href="#space" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "The Space" : "空間・店舗"}</a>
+            <a href="#locator" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Store Location" : "店舗案内"}</a>
+            <a
+              href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMobileMenuOpen(false)}
+              className="mt-2 w-full text-center bg-[#241A12] text-[#FCF7ED] py-2.5 rounded-full text-xs font-semibold block hover:bg-[#CE522A] transition-colors"
             >
-              Visit the café
-            </button>
+              {lang === "EN" ? "Visit the café" : "カフェへ行く"}
+            </a>
           </div>
         )}
 
@@ -238,7 +205,7 @@ export default function Home() {
             <div className="flex items-center gap-2.5">
               <span className="w-[7px] h-[7px] bg-[#CE522A] rounded-full inline-block" />
               <span className="text-[11px] md:text-[11.5px] text-[#6A5747] font-medium tracking-[1.6px] uppercase">
-                {lang === "EN" ? "NAKAMEGURO, TOKYO — SINCE 2019" : "中目黒・東京 — 2019年創業"}
+                {lang === "EN" ? "JINGUMAE, SHIBUYA — SINCE 2019" : "神宮前・渋谷 — 2019年創業"}
               </span>
             </div>
 
@@ -250,8 +217,8 @@ export default function Home() {
             {/* Subhead */}
             <p className="text-[15px] md:text-[16px] leading-[26px] text-[#6A5747] max-w-[440px]">
               {lang === "EN"
-                ? "Single-origin Indonesian coffee, roasted in small batches behind the bar in Tokyo. Served slow, in a room built from teak, terracotta and fifty years of patience."
-                : "インドネシアの単一農園産コーヒーを、中目黒のカウンター裏で少量焙煎。チーク材と素焼きタイル、そして穏やかな時間の中で、一杯ずつ丁寧に抽出します。"}
+                ? "Single-origin Indonesian coffee, roasted in small batches and served slow in Jingumae, Tokyo. In a room built from teak, terracotta and fifty years of patience."
+                : "インドネシアの単一農園産コーヒーを、神宮前の落ち着いた2階カウンターで少量焙煎・抽出。チーク材と素焼きタイル、穏やかな時間の中で一杯ずつ丁寧にお届けします。"}
             </p>
 
             {/* CTA Row */}
@@ -265,22 +232,27 @@ export default function Home() {
                   <path d="M7.394 2.52q-.194 .029-.344 .179-.121 .121-.158 .3-.037 .18 .022 .344 .029 .092 .278 .348 .249 .253 1.462 1.469 1.695 1.695 1.695 1.71 0 .015-3.702 .015h-3.692l-.091 .044q-.238 .121-.322 .362-.081 .238 .007 .465 .062 .103 .15 .194 .092 .088 .179 .129 .092 .036 .572 .036h3.226q3.673 0 3.673 .015 0 .015-1.695 1.71-1.213 1.216-1.462 1.472-.249 .253-.278 .345-.059 .164-.022 .344 .037 .179 .158 .3 .194 .194 .45 .194h.044q.121 0 .212-.058 .151-.107 .553-.499l1.802-1.798q2.263-2.252 2.307-2.34 .077-.135 .077-.3 0-.165-.077-.3-.044-.088-2.303-2.337-2.256-2.252-2.333-2.289-.073-.04-.253-.069-.044 0-.135 .015z" />
                 </svg>
               </a>
-              <a
-                href="#philosophy"
-                className="inline-flex items-center px-6 py-3.5 rounded-full text-[13.5px] font-medium tracking-[0.5px] border border-[#241A12] text-[#241A12] hover:bg-[#241A12] hover:text-[#FCF7ED] active:scale-95 transition-all"
+              <button
+                type="button"
+                onClick={() => setIsOpenHourModalOpen(true)}
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[13.5px] font-medium tracking-[0.5px] border border-[#241A12] text-[#241A12] hover:bg-[#241A12] hover:text-[#FCF7ED] active:scale-95 transition-all group"
               >
-                {lang === "EN" ? "Our philosophy" : "私たちの哲学"}
-              </a>
-            </div>
-
-            {/* Hours */}
-            <div className="flex items-center gap-2.5 pt-2">
-              <span className="w-[6px] h-[6px] bg-[#CE522A] rounded-full inline-block" />
-              <span className="text-[12.5px] text-[#6A5747] font-normal">
-                {lang === "EN"
-                  ? "Open daily 8:00 – 19:00 · Roastery bar from 10:00"
-                  : "営業時間 8:00 – 19:00 · ロースタリーバー 10:00〜"}
-              </span>
+                <svg
+                  className="w-4 h-4 text-[#CE522A] group-hover:text-[#F2C24E] transition-colors"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.8}
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+                <span>{lang === "EN" ? "Open hours" : "営業時間・定休日"}</span>
+              </button>
             </div>
           </div>
 
@@ -303,11 +275,11 @@ export default function Home() {
               </p>
               <div className="flex items-center gap-3 pt-1">
                 <div className="w-[36px] h-[36px] bg-[#CE522A] rounded-full flex items-center justify-center text-[#FCF7ED] font-bold text-[11.5px] tracking-[0.5px]">
-                  RP
+                  LC
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[12.5px] font-semibold text-[#241A12] leading-tight">
-                    Rani Prasetyo
+                    Lemari Coffee
                   </span>
                   <span className="text-[11px] text-[#241A12]/80 leading-tight">
                     {lang === "EN" ? "Founder & Roaster" : "創業者・焙煎士"}
@@ -338,15 +310,10 @@ export default function Home() {
           {/* Label Row */}
           <div className="w-full flex items-center justify-between border-b border-[#D8C7AC] pb-4">
             <div className="flex items-center gap-2.5">
-              <span className="text-[11.5px] font-semibold text-[#CE522A] tracking-[1.4px]">01</span>
-              <span className="w-[26px] h-[1px] bg-[#D8C7AC]" />
               <span className="text-[11.5px] font-semibold text-[#6A5747] tracking-[1.6px] uppercase">
                 {lang === "EN" ? "THE CONCEPT" : "コンセプト"}
               </span>
             </div>
-            <span className="hidden sm:inline-block font-serif italic text-[13px] text-[#6A5747]">
-              {lang === "EN" ? "A coffee cupboard, not a coffee chain." : "チェーン店ではなく、街の小さな珈琲戸棚。"}
-            </span>
           </div>
 
           {/* Statement Row */}
@@ -357,13 +324,6 @@ export default function Home() {
                   ? "Lemari means cupboard. Ours holds seventeen Indonesian farms, a 1970s Probat, and one very stubborn idea: that a cup of coffee should taste of the place it grew."
                   : "「Lemari（ルマリ）」はインドネシア語で戸棚。17箇所の単一農園、1970年代のプロバット焙煎機、そして「その土地の風土がそのまま香る一杯」という確かな情熱をしまっています。"}
               </p>
-              <a
-                href="#beans"
-                className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-[#241A12] tracking-[0.4px] hover:text-[#CE522A] transition-colors group"
-              >
-                <span>{lang === "EN" ? "Read our sourcing notes" : "農園との直接対話を見る"}</span>
-                <span className="transition-transform group-hover:translate-x-1">→</span>
-              </a>
             </div>
 
             <div className="flex-1 flex flex-col gap-4">
@@ -374,7 +334,7 @@ export default function Home() {
               </h2>
               <p className="text-[15px] sm:text-[15.5px] leading-[26px] text-[#6A5747] max-w-[620px]">
                 {lang === "EN"
-                  ? "No blends hidden behind milk. Every bag is traceable to a single family plot, bought above market rate, and roasted the week you drink it."
+                  ? "No blends hidden behind milk. Every harvest is traceable to a single family plot, bought above market rate, and roasted the week you drink it."
                   : "ミルクでごまかすブレンドはありません。すべての豆がどの家族の畑で実ったか辿ることができ、フェアな価格で直接買い付け、飲む週に焙煎します。"}
               </p>
             </div>
@@ -383,7 +343,6 @@ export default function Home() {
           {/* Principles 3 columns */}
           <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10 border-t border-[#D8C7AC] pt-8">
             <div className="flex flex-col gap-3">
-              <span className="font-serif italic text-[13px] text-[#CE522A]">i.</span>
               <h3 className="font-serif text-[21px] font-medium text-[#241A12]">
                 {lang === "EN" ? "Direct trade, always" : "常にダイレクトトレード"}
               </h3>
@@ -395,7 +354,6 @@ export default function Home() {
             </div>
 
             <div className="flex flex-col gap-3">
-              <span className="font-serif italic text-[13px] text-[#CE522A]">ii.</span>
               <h3 className="font-serif text-[21px] font-medium text-[#241A12]">
                 {lang === "EN" ? "Roasted in Tokyo" : "中目黒で少量焙煎"}
               </h3>
@@ -407,7 +365,6 @@ export default function Home() {
             </div>
 
             <div className="flex flex-col gap-3">
-              <span className="font-serif italic text-[13px] text-[#CE522A]">iii.</span>
               <h3 className="font-serif text-[21px] font-medium text-[#241A12]">
                 {lang === "EN" ? "A room to linger in" : "ゆっくり佇むための空間"}
               </h3>
@@ -426,8 +383,6 @@ export default function Home() {
           <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-end gap-5">
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="text-[11.5px] font-semibold text-[#CE522A] tracking-[1.4px]">02</span>
-                <span className="w-[26px] h-[1px] bg-[#C2AE90]" />
                 <span className="text-[11.5px] font-semibold text-[#6A5747] tracking-[1.6px] uppercase">
                   {lang === "EN" ? "FEATURED BEANS & ORIGINS" : "今月の単一農園豆"}
                 </span>
@@ -436,13 +391,11 @@ export default function Home() {
                 {lang === "EN" ? "This month, from the archipelago." : "今月届いた、島々の収穫。"}
               </h2>
             </div>
-            <a
-              href="#shop"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-[#241A12] text-[12.5px] font-semibold tracking-[0.5px] text-[#241A12] hover:bg-[#241A12] hover:text-[#FCF7ED] transition-all"
-            >
-              <span>{lang === "EN" ? "Shop all lots" : "全ロットを見る"}</span>
-              <span>↗</span>
-            </a>
+            <p className="text-[12.5px] text-[#6A5747] max-w-[340px] sm:text-right">
+              {lang === "EN"
+                ? "Directly sourced from family micro-lots in Indonesia, profiled for pure extraction at our Tokyo brew bar."
+                : "インドネシア各地の家族経営農園から直接仕入れ、神宮前のカウンターにて香味を最大限に引き出しています。"}
+            </p>
           </div>
 
           {/* Bean Grid (3 items) */}
@@ -481,24 +434,9 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <div className="px-6 sm:px-7 py-4 border-t border-[#E4D5BC] flex items-center justify-between">
-                <span className="text-[13px] font-semibold text-[#241A12]">¥2,400 / 250g</span>
-                <button
-                  onClick={() =>
-                    handleAddToCart({
-                      id: "bean-gayo",
-                      name: "Aceh Gayo (250g)",
-                      price: 2400,
-                      priceFormatted: "¥2,400",
-                      image: "/assets/revamp/bean-gayo.jpg",
-                      detail: "Sumatra · Wet-hulled",
-                    })
-                  }
-                  className="flex items-center gap-1.5 text-[12px] font-semibold text-[#CE522A] hover:text-[#241A12] active:scale-95 transition-colors"
-                >
-                  <span>{lang === "EN" ? "Add" : "カートへ"}</span>
-                  <span className="text-base font-bold leading-none">+</span>
-                </button>
+              <div className="px-6 sm:px-7 py-4 border-t border-[#E4D5BC] flex items-center justify-between text-xs text-[#6A5747]">
+                <span className="font-semibold text-[#241A12]">{lang === "EN" ? "Medium Roast" : "中煎り"}</span>
+                <span className="text-[11.5px] text-[#CE522A] font-medium">{lang === "EN" ? "Hand Drip & Espresso" : "ドリップ・エスプレッソ"}</span>
               </div>
             </div>
 
@@ -533,24 +471,9 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <div className="px-6 sm:px-7 py-4 border-t border-[#E4D5BC] flex items-center justify-between">
-                <span className="text-[13px] font-semibold text-[#241A12]">¥2,600 / 250g</span>
-                <button
-                  onClick={() =>
-                    handleAddToCart({
-                      id: "bean-toraja",
-                      name: "Toraja Sulawesi (250g)",
-                      price: 2600,
-                      priceFormatted: "¥2,600",
-                      image: "/assets/revamp/bean-toraja.jpg",
-                      detail: "Sulawesi · Fully washed",
-                    })
-                  }
-                  className="flex items-center gap-1.5 text-[12px] font-semibold text-[#CE522A] hover:text-[#241A12] active:scale-95 transition-colors"
-                >
-                  <span>{lang === "EN" ? "Add" : "カートへ"}</span>
-                  <span className="text-base font-bold leading-none">+</span>
-                </button>
+              <div className="px-6 sm:px-7 py-4 border-t border-[#E4D5BC] flex items-center justify-between text-xs text-[#6A5747]">
+                <span className="font-semibold text-[#241A12]">{lang === "EN" ? "Light-Medium Roast" : "浅中煎り"}</span>
+                <span className="text-[11.5px] text-[#CE522A] font-medium">{lang === "EN" ? "Filter Pour Over" : "ハンドドリップ推奨"}</span>
               </div>
             </div>
 
@@ -588,24 +511,9 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <div className="px-6 sm:px-7 py-4 border-t border-[#E4D5BC] flex items-center justify-between">
-                <span className="text-[13px] font-semibold text-[#241A12]">¥2,800 / 250g</span>
-                <button
-                  onClick={() =>
-                    handleAddToCart({
-                      id: "bean-flores",
-                      name: "Bajawa Flores (250g)",
-                      price: 2800,
-                      priceFormatted: "¥2,800",
-                      image: "/assets/revamp/bean-flores.jpg",
-                      detail: "Flores · Natural process",
-                    })
-                  }
-                  className="flex items-center gap-1.5 text-[12px] font-semibold text-[#CE522A] hover:text-[#241A12] active:scale-95 transition-colors"
-                >
-                  <span>{lang === "EN" ? "Add" : "カートへ"}</span>
-                  <span className="text-base font-bold leading-none">+</span>
-                </button>
+              <div className="px-6 sm:px-7 py-4 border-t border-[#E4D5BC] flex items-center justify-between text-xs text-[#6A5747]">
+                <span className="font-semibold text-[#241A12]">{lang === "EN" ? "Light Roast" : "浅煎り"}</span>
+                <span className="text-[11.5px] text-[#CE522A] font-medium">{lang === "EN" ? "Seasonal Micro-Lot" : "季節限定マイクロロット"}</span>
               </div>
             </div>
           </div>
@@ -631,8 +539,6 @@ export default function Home() {
           <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-[#352A20] pb-6">
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="text-[11.5px] font-semibold text-[#F2C24E] tracking-[1.4px]">03</span>
-                <span className="w-[26px] h-[1px] bg-[#4A3B2E]" />
                 <span className="text-[11.5px] font-semibold text-[#A8957F] tracking-[1.6px] uppercase">
                   {lang === "EN" ? "SIGNATURE MENU" : "カフェメニュー"}
                 </span>
@@ -642,11 +548,7 @@ export default function Home() {
               </h2>
             </div>
             <div className="flex flex-col sm:items-end gap-2">
-              <span className="text-[12.5px] text-[#A8957F] max-w-[320px] sm:text-right">
-                {lang === "EN"
-                  ? "Prices include tax. Oat, soy and rice milk +¥80. Every filter is brewed to order."
-                  : "価格はすべて税込。オーツ・ソイ・ライスミルク変更 +¥80。ドリップは注文毎に抽出します。"}
-              </span>
+              
               {/* Category tabs */}
               <div className="flex items-center gap-2 mt-2">
                 <button
@@ -689,10 +591,6 @@ export default function Home() {
                   sizes="(max-width: 1024px) 100vw, 350px"
                   className="object-cover"
                 />
-              </div>
-              <div className="flex justify-between items-center text-[11px] px-1 text-[#A8957F]">
-                <span>V60 · 15g : 250g · 2:45</span>
-                <span className="tracking-[1.2px] text-[#6E5C4A]">NO. 01</span>
               </div>
             </div>
 
@@ -740,7 +638,7 @@ export default function Home() {
                         price: "¥550",
                       },
                     ].map((item) => (
-                      <div key={item.name} className="py-3.5 flex justify-between items-baseline group cursor-pointer hover:bg-white/[0.02] px-2 rounded transition-colors">
+                      <div key={item.name} className="py-3.5 flex justify-between items-baseline group px-2 rounded transition-colors">
                         <div className="flex flex-col">
                           <span className="font-serif text-[17px] text-[#F6EDDC] group-hover:text-[#F2C24E] transition-colors">
                             {item.name}
@@ -796,7 +694,7 @@ export default function Home() {
                         price: "¥520",
                       },
                     ].map((item) => (
-                      <div key={item.name} className="py-3.5 flex justify-between items-baseline group cursor-pointer hover:bg-white/[0.02] px-2 rounded transition-colors">
+                      <div key={item.name} className="py-3.5 flex justify-between items-baseline group px-2 rounded transition-colors">
                         <div className="flex flex-col">
                           <span className="font-serif text-[17px] text-[#F6EDDC] group-hover:text-[#F2C24E] transition-colors">
                             {item.name}
@@ -819,8 +717,6 @@ export default function Home() {
           <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="text-[11.5px] font-semibold text-[#CE522A] tracking-[1.4px]">04</span>
-                <span className="w-[26px] h-[1px] bg-[#D8C7AC]" />
                 <span className="text-[11.5px] font-semibold text-[#6A5747] tracking-[1.6px] uppercase">
                   {lang === "EN" ? "THE SPACE" : "空間・店舗"}
                 </span>
@@ -831,8 +727,8 @@ export default function Home() {
             </div>
             <span className="text-[12.5px] text-[#6A5747] max-w-[320px] sm:text-right">
               {lang === "EN"
-                ? "Built inside a 1960s timber house, five minutes from Nakameguro station. No music above a murmur."
-                : "中目黒駅から徒歩5分、1960年代の木造古民家を改装。心地よい囁きのような音量で音楽が流れます。"}
+                ? "A second-floor retreat in Jingumae, minutes from Harajuku and Omotesando. Breezy terrace and no music above a murmur."
+                : "原宿や表参道から少し離れた神宮前2丁目の路地裏、心地よい2階テラスを備えた木造の隠れ家空間。"}
             </span>
           </div>
 
@@ -869,8 +765,8 @@ export default function Home() {
                   </span>
                   <p className="text-[13px] leading-[21px] text-[#F6EDDC]">
                     {lang === "EN"
-                      ? "Teak shelving by a Nakameguro carpenter. Terracotta from Aichi. One restored Probat sitting where the till should be."
-                      : "中目黒の家具職人によるチーク棚、愛知県産のテラコッタ。レジ横にはレストアされたプロバット焙煎機が佇みます。"}
+                      ? "Custom teak shelving, sunny terrace seating, and single-origin coffee poured slow above the street."
+                      : "温もりあふれるチーク材の棚、心地よい2階テラス席。通りから一歩入った静かな空間で、豆の香りが漂います。"}
                   </p>
                 </div>
                 <div className="flex items-center gap-5 pt-2">
@@ -891,221 +787,14 @@ export default function Home() {
               </div>
             </div>
           </div>
-
-          {/* Facts bar */}
-          <div className="w-full flex flex-wrap items-center justify-between gap-3 border-t border-[#D8C7AC] pt-5 text-[12px] text-[#6A5747]">
-            {[
-              lang === "EN" ? "Open daily 8:00 – 19:00" : "営業時間 8:00 – 19:00",
-              lang === "EN" ? "Counter seating for 8" : "カウンター8席",
-              lang === "EN" ? "Long share table for 12" : "大テーブル12席",
-              lang === "EN" ? "Roastery visible from the bar" : "カウンター奥に見える焙煎機",
-              lang === "EN" ? "Dogs on the terrace" : "テラス席ペット同伴可",
-            ].map((fact) => (
-              <div key={fact} className="flex items-center gap-2">
-                <span className="w-1 h-1 rounded-full bg-[#CE522A]" />
-                <span>{fact}</span>
-              </div>
-            ))}
-          </div>
         </section>
 
-        {/* ================= 8. MERCHANDISE ================= */}
-        <section id="shop" className="scroll-mt-24 w-full px-5 sm:px-8 md:px-14 py-20 md:py-24 bg-[#FCF7ED] flex flex-col gap-10">
-          {/* Header */}
-          <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2.5">
-                <span className="text-[11.5px] font-semibold text-[#CE522A] tracking-[1.4px]">05</span>
-                <span className="w-[26px] h-[1px] bg-[#D8C7AC]" />
-                <span className="text-[11.5px] font-semibold text-[#6A5747] tracking-[1.6px] uppercase">
-                  {lang === "EN" ? "MERCHANDISE & RETAIL" : "オリジナルグッズ"}
-                </span>
-              </div>
-              <h2 className="font-serif text-[34px] sm:text-[40px] md:text-[44px] text-[#241A12] font-normal tracking-[-0.8px]">
-                {lang === "EN" ? "Take a little of the cupboard home." : "ご家庭でもルマリの味わいを。"}
-              </h2>
-            </div>
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#241A12] text-[#F6EDDC] text-[12.5px] font-semibold tracking-[0.5px] hover:bg-[#CE522A] transition-colors"
-            >
-              <span>{lang === "EN" ? "View shopping bag" : "買い物かごを見る"}</span>
-              <span>({totalItemsCount})</span>
-            </button>
-          </div>
-
-          {/* Product Grid (4 items) */}
-          <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Product 1: House Blend */}
-            <div className="flex flex-col gap-3.5 group">
-              <div className="relative w-full h-[300px] rounded-[4px] overflow-hidden bg-stone-200">
-                <Image
-                  src="/assets/revamp/product-house-blend.jpg"
-                  alt="Lemari Coffee House Blend Canister"
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <span className="absolute top-3 left-3 bg-[#1D1610] text-[#F6EDDC] text-[9.5px] font-bold tracking-[1.2px] px-2.5 py-1 rounded-[2px]">
-                  {lang === "EN" ? "BESTSELLER" : "人気No.1"}
-                </span>
-              </div>
-              <div className="flex justify-between items-start">
-                <div className="flex flex-col">
-                  <span className="font-serif text-[18px] font-medium text-[#241A12]">House Blend</span>
-                  <span className="text-[11.5px] text-[#6A5747]">Sumatra · Flores · 250g</span>
-                </div>
-                <button
-                  onClick={() =>
-                    handleAddToCart({
-                      id: "prod-blend",
-                      name: "House Blend Tin (250g)",
-                      price: 1800,
-                      priceFormatted: "¥1,800",
-                      image: "/assets/revamp/product-house-blend.jpg",
-                      detail: "Sumatra · Flores · 250g",
-                    })
-                  }
-                  className="text-[13px] font-semibold text-[#241A12] hover:text-[#CE522A] flex items-center gap-1 active:scale-95 transition-all"
-                >
-                  ¥1,800 <span className="font-bold text-[#CE522A]">+</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Product 2: Tumbler */}
-            <div className="flex flex-col gap-3.5 group">
-              <div className="relative w-full h-[300px] rounded-[4px] overflow-hidden bg-stone-200">
-                <Image
-                  src="/assets/revamp/product-tumbler.jpg"
-                  alt="Lemari Double Wall Tumbler"
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-              </div>
-              <div className="flex justify-between items-start">
-                <div className="flex flex-col">
-                  <span className="font-serif text-[18px] font-medium text-[#241A12]">Lemari Tumbler</span>
-                  <span className="text-[11.5px] text-[#6A5747]">350 ml · double wall</span>
-                </div>
-                <button
-                  onClick={() =>
-                    handleAddToCart({
-                      id: "prod-tumbler",
-                      name: "Lemari Tumbler",
-                      price: 3400,
-                      priceFormatted: "¥3,400",
-                      image: "/assets/revamp/product-tumbler.jpg",
-                      detail: "350 ml · Double Wall Stainless",
-                    })
-                  }
-                  className="text-[13px] font-semibold text-[#241A12] hover:text-[#CE522A] flex items-center gap-1 active:scale-95 transition-all"
-                >
-                  ¥3,400 <span className="font-bold text-[#CE522A]">+</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Product 3: Bean Club Box */}
-            <div className="flex flex-col gap-3.5 group">
-              <div className="relative w-full h-[300px] rounded-[4px] overflow-hidden bg-stone-200">
-                <Image
-                  src="/assets/revamp/product-bean-box.jpg"
-                  alt="Lemari Bean Club Box subscription"
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-              </div>
-              <div className="flex justify-between items-start">
-                <div className="flex flex-col">
-                  <span className="font-serif text-[18px] font-medium text-[#241A12]">Bean Club Box</span>
-                  <span className="text-[11.5px] text-[#6A5747]">Two lots · 250 g each</span>
-                </div>
-                <button
-                  onClick={() =>
-                    handleAddToCart({
-                      id: "prod-box",
-                      name: "Bean Club Box",
-                      price: 3200,
-                      priceFormatted: "¥3,200",
-                      image: "/assets/revamp/product-bean-box.jpg",
-                      detail: "Two Seasonal Micro-Lots",
-                    })
-                  }
-                  className="text-[13px] font-semibold text-[#241A12] hover:text-[#CE522A] flex items-center gap-1 active:scale-95 transition-all"
-                >
-                  ¥3,200 <span className="font-bold text-[#CE522A]">+</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Product 4: Kasama Cup */}
-            <div className="flex flex-col gap-3.5 group">
-              <div className="relative w-full h-[300px] rounded-[4px] overflow-hidden bg-stone-200">
-                <Image
-                  src="/assets/revamp/product-kasama-cup.jpg"
-                  alt="Handcrafted ceramic Kasama Cup"
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <span className="absolute top-3 left-3 bg-[#1D1610] text-[#F6EDDC] text-[9.5px] font-bold tracking-[1.2px] px-2.5 py-1 rounded-[2px]">
-                  {lang === "EN" ? "LIMITED" : "数量限定"}
-                </span>
-              </div>
-              <div className="flex justify-between items-start">
-                <div className="flex flex-col">
-                  <span className="font-serif text-[18px] font-medium text-[#241A12]">Kasama Cup</span>
-                  <span className="text-[11.5px] text-[#6A5747]">180 ml · stoneware</span>
-                </div>
-                <button
-                  onClick={() =>
-                    handleAddToCart({
-                      id: "prod-cup",
-                      name: "Kasama Cup (Stoneware)",
-                      price: 2900,
-                      priceFormatted: "¥2,900",
-                      image: "/assets/revamp/product-kasama-cup.jpg",
-                      detail: "180 ml · Handcrafted Pottery",
-                    })
-                  }
-                  className="text-[13px] font-semibold text-[#241A12] hover:text-[#CE522A] flex items-center gap-1 active:scale-95 transition-all"
-                >
-                  ¥2,900 <span className="font-bold text-[#CE522A]">+</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Shipping Note */}
-          <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-t border-[#D8C7AC] pt-5 text-[12.5px] text-[#6A5747]">
-            <div className="flex items-center gap-2.5">
-              <span className="text-[#CE522A] font-bold">🚚</span>
-              <span>
-                {lang === "EN"
-                  ? "Ships across Japan in 2–3 days. Free over ¥5,000. In-store pickup in Nakameguro."
-                  : "全国へ2〜3日でお届け。5,000円以上で送料無料。中目黒店での受取も可能。"}
-              </span>
-            </div>
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="font-serif italic text-[13px] text-[#241A12] hover:text-[#CE522A] transition-colors"
-            >
-              {lang === "EN" ? "Bean subscription from ¥1,600 / month →" : "定期便 毎月¥1,600〜 →"}
-            </button>
-          </div>
-        </section>
-
-        {/* ================= 9. SOCIAL PROOF ================= */}
+        {/* ================= 8. SOCIAL PROOF ================= */}
         <section className="w-full px-5 sm:px-8 md:px-14 py-20 md:py-24 bg-[#E8D8BF] flex flex-col gap-12">
           {/* Header */}
           <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="text-[11.5px] font-semibold text-[#CE522A] tracking-[1.4px]">06</span>
-                <span className="w-[26px] h-[1px] bg-[#C2AE90]" />
                 <span className="text-[11.5px] font-semibold text-[#6A5747] tracking-[1.6px] uppercase">
                   {lang === "EN" ? "SOCIAL PROOF" : "お客様の声"}
                 </span>
@@ -1114,13 +803,6 @@ export default function Home() {
                 {lang === "EN" ? "Word of mouth, mostly in Japanese." : "愛され続ける、日々の評判。"}
               </h2>
             </div>
-            <a
-              href="#locator"
-              className="text-[12.5px] font-semibold tracking-[0.4px] text-[#241A12] hover:text-[#CE522A] transition-colors flex items-center gap-1.5"
-            >
-              <span>{lang === "EN" ? "1,240 reviews on Google & Tabelog" : "Google・食べログで1,240件以上の高評価"}</span>
-              <span>↗</span>
-            </a>
           </div>
 
           {/* Proof Body */}
@@ -1138,8 +820,8 @@ export default function Home() {
               </div>
               <p className="text-[12.5px] leading-[20px] text-[#6A5747]">
                 {lang === "EN"
-                  ? "Average across Google & Tabelog, both Nakameguro & Kiyosumi Shirakawa stores, last twelve months."
-                  : "中目黒店・清澄白河店の過去12ヶ月における総合評価平均。"}
+                  ? "Average across Google & Tabelog for our Jingumae store, last twelve months."
+                  : "神宮前店の過去12ヶ月におけるGoogle・食べログ総合評価平均。"}
               </p>
               <div className="border-t border-[#C2AE90] pt-5 mt-2 flex flex-col gap-3">
                 <blockquote className="font-serif italic text-[20px] sm:text-[21px] leading-[29px] text-[#241A12]">
@@ -1204,157 +886,155 @@ export default function Home() {
               </div>
             </div>
           </div>
-
-          {/* Press Bar */}
-          <div className="w-full flex flex-wrap items-center justify-between gap-6 border-t border-[#C2AE90] pt-6">
-            <span className="text-[10px] font-bold tracking-[1.6px] text-[#6A5747] uppercase">
-              {lang === "EN" ? "AS SEEN IN" : "掲載メディア"}
-            </span>
-            {["MONOCLE", "KINFOLK", "&Premium", "TIME OUT TOKYO", "STANDART"].map((press) => (
-              <span
-                key={press}
-                className="font-serif text-[16px] sm:text-[17px] font-medium tracking-[1.2px] text-[#241A12]/80 hover:text-[#241A12] transition-colors"
-              >
-                {press}
-              </span>
-            ))}
-          </div>
         </section>
 
-        {/* ================= 10. STORE LOCATOR ================= */}
+        {/* ================= 9. STORE LOCATION ================= */}
         <section id="locator" className="scroll-mt-24 w-full px-5 sm:px-8 md:px-14 py-20 md:py-24 bg-[#1D1610] text-[#F6EDDC] flex flex-col gap-10">
           {/* Header */}
           <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="text-[11.5px] font-semibold text-[#F2C24E] tracking-[1.4px]">07</span>
-                <span className="w-[26px] h-[1px] bg-[#4A3B2E]" />
                 <span className="text-[11.5px] font-semibold text-[#A8957F] tracking-[1.6px] uppercase">
-                  {lang === "EN" ? "STORE LOCATOR" : "店舗案内"}
+                  {lang === "EN" ? "OUR STORE" : "店舗案内"}
                 </span>
               </div>
               <h2 className="font-serif text-[34px] sm:text-[40px] md:text-[44px] text-[#F6EDDC] font-normal tracking-[-0.8px]">
-                {lang === "EN" ? "Two doors, both in Tokyo." : "都内2店舗、それぞれの空間で。"}
+                {lang === "EN" ? "Our doors in Jingumae, Harajuku." : "神宮前の路地裏、たったひとつの空間。"}
               </h2>
             </div>
-            <a
-              href="https://maps.google.com/?q=Kamimeguro+Tokyo"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-[#5A4734] text-[12.5px] font-semibold tracking-[0.5px] text-[#F6EDDC] hover:border-[#F2C24E] hover:text-[#F2C24E] transition-all"
-            >
-              <span>{lang === "EN" ? "Open in maps" : "Googleマップで開く"}</span>
-              <span>↗</span>
-            </a>
           </div>
 
-          {/* Stores 2 cols */}
-          <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Store 1: Nakameguro */}
-            <div className="bg-[#251C15] rounded-[4px] overflow-hidden flex flex-col group border border-[#3B2E23]">
-              <div className="relative w-full h-[230px] sm:h-[240px]">
-                <Image
-                  src="/assets/revamp/store-nakameguro.jpg"
-                  alt="Lemari Coffee Nakameguro Tokyo storefront"
-                  fill
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <span className="absolute top-3.5 left-3.5 bg-[#F2C24E] text-[#241A12] text-[9.5px] font-bold tracking-[1.3px] px-2.5 py-1 rounded-[2px]">
-                  {lang === "EN" ? "THE ORIGINAL" : "1号店・本店"}
-                </span>
-              </div>
-              <div className="p-6 sm:p-7 flex flex-col gap-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-serif text-[24px] sm:text-[26px] font-medium text-[#F6EDDC]">
-                    {lang === "EN" ? "Nakameguro" : "中目黒本店"}
-                  </h3>
-                  <a
-                    href="https://maps.google.com/?q=2-14-6+Kamimeguro+Meguro-ku+Tokyo"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#F2C24E] text-base hover:scale-110 transition-transform"
-                    title="Directions to Nakameguro"
-                  >
-                    ↗
-                  </a>
-                </div>
-                <div className="text-[12.5px] leading-[20px] text-[#A8957F]">
-                  <p>2-14-6 Kamimeguro, Meguro-ku</p>
-                  <p>Tokyo 153-0051, Japan</p>
-                </div>
-                <div className="border-t border-[#3B2E23] pt-3.5 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#7FB069]" />
-                    <span className="text-[#F6EDDC]">{lang === "EN" ? "Daily 8:00 – 19:00" : "毎日 8:00 – 19:00"}</span>
-                  </div>
-                  <span className="text-[#8E7C69]">{lang === "EN" ? "7 min · Nakameguro Stn (Hibiya / Tokyu)" : "中目黒駅 徒歩7分"}</span>
-                </div>
-              </div>
+          {/* Single Store Showcase */}
+          <div className="w-full bg-[#251C15] rounded-[4px] overflow-hidden border border-[#3B2E23] grid grid-cols-1 lg:grid-cols-12">
+            {/* Google Maps Interactive Embed */}
+            <div className="relative w-full h-[340px] sm:h-[420px] lg:h-full min-h-[340px] lg:col-span-5 overflow-hidden bg-[#1A120C]">
+              <iframe
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3241.136!2d139.7080357!3d35.6736546!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6018f347986bbfbf%3A0x247a1cdf11527985!2sLemari%20Coffee!5e0!3m2!1sja!2sjp!4v1700000000000!5m2!1sja!2sjp"
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen={false}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                title="Lemari Coffee Google Maps Location"
+                className="w-full h-full min-h-[340px] lg:min-h-full"
+              />
+              <a
+                href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute top-4 left-4 bg-[#F2C24E] text-[#241A12] text-[9.5px] font-bold tracking-[1.3px] px-3 py-1.5 rounded-[2px] uppercase shadow-md hover:bg-[#e0b03e] transition-colors flex items-center gap-1.5 z-10"
+              >
+                <span>{lang === "EN" ? "OPEN IN MAPS" : "マップで開く"}</span>
+                <span>↗</span>
+              </a>
             </div>
 
-            {/* Store 2: Kiyosumi Shirakawa */}
-            <div className="bg-[#251C15] rounded-[4px] overflow-hidden flex flex-col group border border-[#3B2E23]">
-              <div className="relative w-full h-[230px] sm:h-[240px]">
-                <Image
-                  src="/assets/revamp/store-kiyosumi.jpg"
-                  alt="Lemari Coffee Kiyosumi Shirakawa roastery bar"
-                  fill
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <span className="absolute top-3.5 left-3.5 bg-[#F2C24E] text-[#241A12] text-[9.5px] font-bold tracking-[1.3px] px-2.5 py-1 rounded-[2px]">
-                  {lang === "EN" ? "ROASTERY BAR" : "ロースタリーバー"}
-                </span>
-              </div>
-              <div className="p-6 sm:p-7 flex flex-col gap-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-serif text-[24px] sm:text-[26px] font-medium text-[#F6EDDC]">
-                    {lang === "EN" ? "Kiyosumi Shirakawa" : "清澄白河店"}
-                  </h3>
-                  <a
-                    href="https://maps.google.com/?q=3-1-8+Shirakawa+Koto-ku+Tokyo"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#F2C24E] text-base hover:scale-110 transition-transform"
-                    title="Directions to Kiyosumi Shirakawa"
-                  >
-                    ↗
-                  </a>
-                </div>
-                <div className="text-[12.5px] leading-[20px] text-[#A8957F]">
-                  <p>3-1-8 Shirakawa, Koto-ku</p>
-                  <p>Tokyo 135-0021, Japan</p>
-                </div>
-                <div className="border-t border-[#3B2E23] pt-3.5 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#7FB069]" />
-                    <span className="text-[#F6EDDC]">{lang === "EN" ? "Tue – Sun 9:00 – 18:00" : "火〜日 9:00 – 18:00"}</span>
+            {/* Store Information */}
+            <div className="p-7 sm:p-9 lg:p-10 flex flex-col justify-between gap-8 lg:col-span-7">
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-[#3B2E23] pb-5">
+                  <div>
+                    <h3 className="font-serif text-[28px] sm:text-[32px] font-medium text-[#F6EDDC]">
+                      {lang === "EN" ? "Harajuku / Jingumae" : "神宮前店（原宿）"}
+                    </h3>
                   </div>
-                  <span className="text-[#8E7C69]">{lang === "EN" ? "4 min · Kiyosumi-shirakawa Stn" : "清澄白河駅 徒歩4分"}</span>
                 </div>
+
+                {/* Details Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-[13px]">
+                  {/* Address */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10.5px] font-bold tracking-[1.4px] text-[#F2C24E] uppercase">
+                      {lang === "EN" ? "ADDRESS" : "所在地"}
+                    </span>
+                    <p className="text-[#F6EDDC] leading-relaxed">
+                      J&apos;s Vendor 2F, 2-19-2 Jingumae, Shibuya-ku<br />
+                      Tokyo 150-0001, Japan
+                    </p>
+                    <p className="text-[11.5px] text-[#A8957F]">
+                      〒150-0001 東京都渋谷区神宮前2-19-2 J&apos;s Vendor 2F
+                    </p>
+                  </div>
+
+                  {/* Access */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10.5px] font-bold tracking-[1.4px] text-[#F2C24E] uppercase">
+                      {lang === "EN" ? "ACCESS" : "アクセス"}
+                    </span>
+                    <p className="text-[#F6EDDC] leading-relaxed">
+                      {lang === "EN"
+                        ? "8 min walk from Harajuku & Meiji-jingumae Stations"
+                        : "原宿駅・明治神宮前〈原宿〉駅より徒歩8分"}
+                    </p>
+                    <p className="text-[11.5px] text-[#A8957F]">
+                      {lang === "EN"
+                        ? "JR Yamanote Line / Tokyo Metro Chiyoda & Fukutoshin Lines (8 min from Kitasando)"
+                        : "JR山手線 / 東京メトロ千代田線・副都心線（北参道駅からも徒歩8分）"}
+                    </p>
+                  </div>
+
+                  {/* Hours */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10.5px] font-bold tracking-[1.4px] text-[#F2C24E] uppercase">
+                      {lang === "EN" ? "HOURS & WALK-INS" : "営業時間・ご来店"}
+                    </span>
+                    <p className="text-[#F6EDDC] leading-relaxed">
+                      {lang === "EN" ? "Tue – Fri, Sun: 11:00 – 18:00 · Sat: 11:00 – 20:00" : "火〜金・日：11:00 – 18:00 · 土曜：11:00 – 20:00"}
+                    </p>
+                    <p className="text-[11.5px] text-[#A8957F]">
+                      {lang === "EN"
+                        ? "Closed on Mondays · Walk-ins always welcome"
+                        : "月曜定休日 · 予約不要でお気軽にどうぞ"}
+                    </p>
+                  </div>
+
+                  {/* Space & Specialty */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10.5px] font-bold tracking-[1.4px] text-[#F2C24E] uppercase">
+                      {lang === "EN" ? "COFFEE & ATMOSPHERE" : "空間・こだわり"}
+                    </span>
+                    <p className="text-[#F6EDDC] leading-relaxed">
+                      {lang === "EN"
+                        ? "Cozy 2F terrace & timber bar tucked off the main street"
+                        : "路地裏の2階に広がる開放的なテラス席と木のカウンター"}
+                    </p>
+                    <p className="text-[11.5px] text-[#A8957F]">
+                      {lang === "EN"
+                        ? "Indonesian specialty single origins, pour-over & house cakes"
+                        : "インドネシア直輸入の希少な単一農園豆と自家製スイーツ"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-4 border-t border-[#3B2E23] flex flex-wrap items-center gap-3">
+                <a
+                  href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-[#F2C24E] text-[#241A12] px-5 py-2.5 rounded-full text-xs font-semibold hover:bg-[#e0b03e] transition-colors"
+                >
+                  <span>{lang === "EN" ? "Get Directions (Google Maps)" : "Googleマップで道順を見る"}</span>
+                  <span>↗</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setIsOpenHourModalOpen(true)}
+                  className="inline-flex items-center gap-2 border border-[#5A4734] text-[#F6EDDC] px-5 py-2.5 rounded-full text-xs font-semibold hover:border-[#F2C24E] hover:text-[#F2C24E] transition-colors"
+                >
+                  <span>📅</span>
+                  <span>{lang === "EN" ? "Check Hours & Calendar" : "営業時間・カレンダーを確認"}</span>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Pickup Band */}
-          <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-t border-[#4A3B2E] pt-5 text-[12.5px] text-[#A8957F]">
-            <p>
-              {lang === "EN"
-                ? "Order online, pick up at the roastery in Meguro — Tuesday to Saturday, 10:00 to 17:00."
-                : "オンラインで注文し、目黒ロースタリーで受取可能 — 火曜〜土曜 10:00〜17:00"}
-            </p>
-            <button
-              onClick={() => setIsVisitModalOpen(true)}
-              className="font-semibold text-[#F6EDDC] hover:text-[#F2C24E] transition-colors flex items-center gap-1.5"
-            >
-              <span>{lang === "EN" ? "Wholesale & private hire" : "豆の卸売り・店舗貸切について"}</span>
-              <span>→</span>
-            </button>
-          </div>
+        
         </section>
 
-        {/* ================= 11. FOOTER ================= */}
+        {/* ================= 10. FOOTER ================= */}
         <footer className="w-full px-5 sm:px-8 md:px-14 pt-16 md:pt-20 pb-8 bg-[#F2C24E] text-[#241A12] flex flex-col gap-12">
           {/* Footer Top */}
           <div className="w-full flex flex-col lg:flex-row justify-between items-start gap-12">
@@ -1402,27 +1082,28 @@ export default function Home() {
             {/* Links Columns */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 sm:gap-14 text-[12.5px]">
               <div className="flex flex-col gap-2.5">
-                <span className="text-[10.5px] font-bold tracking-[1.5px] text-[#6B4A1F] uppercase">{lang === "EN" ? "SHOP" : "ショップ"}</span>
-                <a href="#beans" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Single origin" : "シングルオリジン"}</a>
-                <a href="#shop" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Subscriptions" : "定期便"}</a>
-                <a href="#shop" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Merchandise" : "グッズ・器具"}</a>
-                <a href="#shop" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Gift cards" : "ギフトカード"}</a>
+                <span className="text-[10.5px] font-bold tracking-[1.5px] text-[#6B4A1F] uppercase">{lang === "EN" ? "DISCOVER" : "ブランド"}</span>
+                <a href="#philosophy" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Philosophy" : "私たちの哲学"}</a>
+                <a href="#menu" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Café menu" : "カフェメニュー"}</a>
+                <a href="#space" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "The space" : "店舗・喫茶空間"}</a>
               </div>
 
               <div className="flex flex-col gap-2.5">
                 <span className="text-[10.5px] font-bold tracking-[1.5px] text-[#6B4A1F] uppercase">{lang === "EN" ? "VISIT" : "店舗情報"}</span>
-                <a href="#locator" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Nakameguro" : "中目黒店"}</a>
-                <a href="#locator" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Kiyosumi Shirakawa" : "清澄白河店"}</a>
-                <button onClick={() => setIsVisitModalOpen(true)} className="text-left hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Wholesale" : "豆の卸売り"}</button>
-                <button onClick={() => setIsVisitModalOpen(true)} className="text-left hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Private hire" : "店舗貸切"}</button>
+                <a href="#locator" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Our Location" : "神宮前店"}</a>
+                <button
+                  type="button"
+                  onClick={() => setIsOpenHourModalOpen(true)}
+                  className="text-left hover:text-[#CE522A] transition-colors"
+                >
+                  {lang === "EN" ? "Hours & Calendar" : "営業時間・カレンダー"}
+                </button>
               </div>
 
               <div className="flex flex-col gap-2.5">
                 <span className="text-[10.5px] font-bold tracking-[1.5px] text-[#6B4A1F] uppercase">{lang === "EN" ? "COMPANY" : "企業情報"}</span>
                 <a href="#philosophy" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Our story" : "ブランドの歩み"}</a>
-                <a href="#beans" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Sourcing" : "農園との直接対話"}</a>
-                <a href="#philosophy" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Journal" : "ジャーナル"}</a>
-                <a href="#locator" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Careers" : "採用情報"}</a>
+                <a href="#beans" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Single Origin Beans" : "シングルオリジン"}</a>
               </div>
             </div>
           </div>
@@ -1433,7 +1114,7 @@ export default function Home() {
               LEMARI COFFEE
             </span>
             <div className="flex flex-col md:items-end gap-2 pb-2 text-[11.5px]">
-              <span className="text-[#4A3418]">Est. 2019 · Nakameguro, Tokyo</span>
+              <span className="text-[#4A3418]">Est. 2019 · Jingumae, Shibuya, Tokyo</span>
               <div className="flex items-center gap-4 font-semibold text-[#241A12]">
                 <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#CE522A]">Instagram</a>
                 <a href="https://tabelog.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#CE522A]">Tabelog</a>
@@ -1448,289 +1129,292 @@ export default function Home() {
             <div className="flex items-center gap-4">
               <a href="#" className="hover:underline">{lang === "EN" ? "Privacy" : "プライバシーポリシー"}</a>
               <a href="#" className="hover:underline">{lang === "EN" ? "Terms" : "利用規約"}</a>
-              <a href="#" className="hover:underline">{lang === "EN" ? "Stockists" : "取扱店舗"}</a>
+              <a href="mailto:hello@lemaricoffee.jp" className="hover:underline">{lang === "EN" ? "Contact" : "お問い合わせ"}</a>
             </div>
           </div>
         </footer>
       </div>
 
-      {/* Slide-Over Shopping Bag Drawer */}
-      {isCartOpen && (
+      {/* ================= OPEN HOURS & CALENDAR POP-UP MODAL ================= */}
+      {isOpenHourModalOpen && (
         <div
           onClick={(e) => {
-            if (e.target === e.currentTarget) setIsCartOpen(false);
+            if (e.target === e.currentTarget) setIsOpenHourModalOpen(false);
           }}
-          className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-5 bg-black/75 backdrop-blur-sm animate-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="calendar-modal-title"
         >
-          <div className="w-full max-w-md bg-[#F6EDDC] h-full flex flex-col justify-between shadow-2xl p-6 sm:p-8 text-[#241A12] animate-in slide-in-from-right duration-300">
-            {/* Drawer Top */}
-            <div>
-              <div className="flex items-center justify-between border-b border-[#D8C7AC] pb-4 mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="font-serif text-xl font-medium">
-                    {lang === "EN" ? "Your Cupboard" : "ショッピングバッグ"}
-                  </span>
-                  <span className="bg-[#CE522A] text-[#FCF7ED] text-[11px] font-bold px-2 py-0.5 rounded-full">
-                    {totalItemsCount}
-                  </span>
-                </div>
+          <div className="bg-[#241A12] text-[#FCF7ED] w-full max-w-2xl rounded-xl shadow-2xl relative border-2 border-[#241A12] max-h-[96vh] flex flex-col overflow-hidden animate-modal-pop">
+            {/* Modal Top Control Bar */}
+            <div className="px-4 sm:px-6 py-3 bg-[#1A120C] border-b border-[#3B2D21] flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold tracking-[1.2px] text-[#F6EDDC] uppercase text-[11px] sm:text-xs">
+                  {lang === "EN" ? "LEMARI COFFEE · OPERATING SCHEDULE" : "ルマリコーヒー · 営業カレンダー"}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setIsCartOpen(false)}
-                  className="text-stone-500 hover:text-black text-xl p-1 font-bold leading-none"
-                  aria-label="Close cart"
+                  onClick={() => setIsOpenHourModalOpen(false)}
+                  className="w-7 h-7 rounded-full bg-[#3B2D21] hover:bg-[#CE522A] text-[#FCF7ED] flex items-center justify-center text-sm font-semibold transition-colors"
+                  aria-label="Close dialog"
                 >
                   ✕
                 </button>
               </div>
+            </div>
 
-              {/* Free shipping banner */}
-              <div className="bg-[#E8D8BF] p-3 rounded-lg text-xs text-[#4A3418] mb-4">
-                {freeShippingRemaining === 0 ? (
-                  <span className="font-semibold text-emerald-800">
-                    {lang === "EN" ? "✓ Free delivery unlocked across Japan!" : "✓ 日本国内送料無料が適用されました！"}
-                  </span>
-                ) : (
-                  <span>
-                    {lang === "EN" ? (
-                      <>Add <strong>¥{freeShippingRemaining.toLocaleString()}</strong> more for free nationwide delivery.</>
-                    ) : (
-                      <>あと <strong>¥{freeShippingRemaining.toLocaleString()}</strong> のご購入で全国送料無料</>
-                    )}
-                  </span>
-                )}
-              </div>
+            {/* Modal Body — Inspired by calendar design with Lemari Coffee Palette */}
+            <div className="overflow-y-auto flex-1 flex flex-col p-3 sm:p-5 bg-[#1A120C]">
+              {/* Calendar Container with Left Sidebar & Grid */}
+              <div className="w-full flex bg-[#241A12] border-2 border-[#241A12] rounded-md overflow-hidden shadow-xl">
+                {/* Left Sidebar — Rotated 2026 . NOVEMBER */}
+                <div className="w-11 sm:w-16 bg-[#241A12] text-[#FCF7ED] flex flex-col justify-between items-center py-4 select-none shrink-0 border-r-2 border-[#241A12]">
+                  {/* Prev Month Arrow */}
+                  <button
+                    type="button"
+                    onClick={handlePrevMonth}
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-[#A8957F] hover:text-[#FCF7ED] hover:bg-white/10 transition-colors text-xs"
+                    aria-label="Previous Month"
+                    title="Previous Month"
+                  >
+                    ▲
+                  </button>
 
-              {/* Items List */}
-              <div className="flex flex-col divide-y divide-[#D8C7AC]/70 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
-                {cart.length === 0 ? (
-                  <div className="py-16 text-center text-stone-500 text-sm flex flex-col items-center gap-3">
-                    <span className="text-3xl">☕</span>
-                    <p>{lang === "EN" ? "Your cupboard is empty." : "カートは現在空です。"}</p>
-                    <button
-                      onClick={() => setIsCartOpen(false)}
-                      className="text-xs font-semibold text-[#CE522A] underline"
-                    >
-                      {lang === "EN" ? "Explore fresh roasted lots" : "焙煎豆一覧を見る"}
-                    </button>
+                  {/* Vertical Month Title */}
+                  <div className="flex-1 flex items-center justify-center [writing-mode:vertical-rl] rotate-180 tracking-[4px] sm:tracking-[6px] font-sans font-extrabold text-xs sm:text-base text-[#FCF7ED] my-3">
+                    <span>{calendarYear}</span>
+                    <span className="my-1.5 sm:my-2 text-[#CE522A] font-extrabold text-base sm:text-lg leading-none">·</span>
+                    <span className="uppercase">{monthNamesEN[calendarMonthIndex]}</span>
                   </div>
-                ) : (
-                  cart.map((item) => (
-                    <div key={item.id} className="py-3.5 flex items-center justify-between gap-3">
-                      <div className="relative w-14 h-14 rounded overflow-hidden shrink-0 bg-stone-200">
-                        <Image src={item.image} alt={item.name} fill sizes="56px" className="object-cover" />
+
+                  {/* Next Month Arrow */}
+                  <button
+                    type="button"
+                    onClick={handleNextMonth}
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-[#A8957F] hover:text-[#FCF7ED] hover:bg-white/10 transition-colors text-xs"
+                    aria-label="Next Month"
+                    title="Next Month"
+                  >
+                    ▼
+                  </button>
+                </div>
+
+                {/* Right Calendar Table Grid */}
+                <div className="flex-1 flex flex-col bg-[#241A12]">
+                  {/* Weekday Header Row (MON to SUN) */}
+                  <div className="grid grid-cols-7 bg-[#FCF7ED] border-b-2 border-[#241A12]">
+                    {(lang === "EN" ? weekDayNamesMondayEN : weekDayNamesMondayJP).map((dayName, idx) => (
+                      <div
+                        key={dayName}
+                        className={`py-2 sm:py-2.5 text-center text-[10px] sm:text-xs font-bold tracking-[1px] text-[#241A12] ${
+                          idx < 6 ? "border-r border-[#241A12]" : ""
+                        }`}
+                      >
+                        {dayName}
                       </div>
-                      <div className="flex-1 flex flex-col">
-                        <span className="font-serif text-[15px] font-medium leading-tight">
-                          {item.name}
-                        </span>
-                        {item.detail && (
-                          <span className="text-[11px] text-[#6A5747]">{item.detail}</span>
-                        )}
-                        <span className="text-xs font-semibold text-[#CE522A] mt-1">
-                          {item.priceFormatted}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 border border-[#D8C7AC] rounded-full px-2 py-1 text-xs">
+                    ))}
+                  </div>
+
+                  {/* Dates Grid with Solid 1px Gridlines */}
+                  <div className="grid grid-cols-7 bg-[#241A12] gap-[1px]">
+                    {/* Empty cells before month start */}
+                    {Array.from({ length: firstDayOfWeekMonday }).map((_, i) => (
+                      <div
+                        key={`empty-leading-${i}`}
+                        className="bg-white min-h-[52px] sm:min-h-[64px] md:min-h-[72px]"
+                      />
+                    ))}
+
+                    {/* Month Days */}
+                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                      const dayNum = i + 1;
+                      const dateObj = new Date(calendarYear, calendarMonthIndex, dayNum);
+                      const isClosed = isDateClosed(dateObj);
+                      const isEvent = dayNum === 21; // Standout Event Date
+
+                      const now = new Date();
+                      const isToday =
+                        now.getFullYear() === calendarYear &&
+                        now.getMonth() === calendarMonthIndex &&
+                        now.getDate() === dayNum;
+
+                      const isSelected =
+                        selectedCalendarDate.getFullYear() === calendarYear &&
+                        selectedCalendarDate.getMonth() === calendarMonthIndex &&
+                        selectedCalendarDate.getDate() === dayNum;
+
+                      if (isEvent) {
+                        return (
+                          <button
+                            key={`day-${dayNum}`}
+                            type="button"
+                            onClick={() => setSelectedCalendarDate(dateObj)}
+                            className={`relative flex flex-col justify-between p-1 sm:p-1.5 transition-all text-left group min-h-[52px] sm:min-h-[64px] md:min-h-[72px] cursor-pointer bg-[#F2C24E] hover:bg-[#e5b33b] ${
+                              isSelected
+                                ? "ring-2 ring-inset ring-[#241A12] z-20 scale-[1.03] shadow-md"
+                                : "shadow-xs"
+                            }`}
+                          >
+                            {/* Date Number + Event Pill */}
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[11px] sm:text-[12.5px] font-sans font-black text-[#241A12] leading-none">
+                                {dayNum}
+                              </span>
+                              <span className="text-[7.5px] sm:text-[8px] font-black tracking-wider bg-[#241A12] text-[#F2C24E] px-1 py-0.5 rounded-[2px] uppercase leading-none shadow-2xs">
+                                {lang === "EN" ? "EVENT" : "特 別"}
+                              </span>
+                            </div>
+
+                            {/* Center Event Marker */}
+                            <div className="flex-1 flex flex-col items-center justify-center py-0.5">
+                              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-[#241A12] text-[#F2C24E] flex items-center justify-center font-black text-[10px] sm:text-[11px] shadow-xs group-hover:scale-110 transition-transform">
+                                ★
+                              </div>
+                              <span className="text-[7.5px] sm:text-[8.5px] font-extrabold text-[#241A12] tracking-tighter mt-0.5 leading-none uppercase">
+                                {lang === "EN" ? "CUPPING" : "カッピング"}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      }
+
+                      return (
                         <button
-                          onClick={() => updateCartQty(item.id, -1)}
-                          className="text-[#6A5747] hover:text-[#241A12] px-1 font-bold"
+                          key={`day-${dayNum}`}
+                          type="button"
+                          onClick={() => setSelectedCalendarDate(dateObj)}
+                          className={`relative flex flex-col justify-between p-1 sm:p-1.5 transition-colors text-left group min-h-[52px] sm:min-h-[64px] md:min-h-[72px] cursor-pointer ${
+                            isSelected
+                              ? "bg-[#F5ECE0] ring-2 ring-inset ring-[#241A12] z-10"
+                              : isToday
+                              ? "bg-[#FFFBF5]"
+                              : "bg-white hover:bg-[#FAF4EC]"
+                          }`}
                         >
-                          -
+                          {/* Date Number at Top-Left */}
+                          <div className="flex items-center justify-between w-full">
+                            <span
+                              className={`text-[10px] sm:text-[11.5px] font-sans font-semibold leading-none ${
+                                isToday
+                                  ? "w-4 h-4 rounded-full bg-[#CE522A] text-[#FCF7ED] flex items-center justify-center font-bold text-[9.5px]"
+                                  : "text-[#241A12]"
+                              }`}
+                            >
+                              {dayNum}
+                            </span>
+                            {isToday && !isSelected && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#F2C24E]" title="Today" />
+                            )}
+                          </div>
+
+                          {/* Center Marker: Solid Circle (Open) or Red Cross (Closed) */}
+                          <div className="flex-1 flex items-center justify-center py-0.5">
+                            {isClosed ? (
+                              <svg
+                                className="w-5 h-5 sm:w-6 sm:h-6 text-[#CE522A] transition-transform group-hover:scale-110 drop-shadow-2xs"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            ) : (
+                              <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#241A12] transition-transform group-hover:scale-110 shadow-xs" />
+                            )}
+                          </div>
                         </button>
-                        <span className="font-semibold min-w-[12px] text-center">{item.qty}</span>
-                        <button
-                          onClick={() => updateCartQty(item.id, 1)}
-                          className="text-[#6A5747] hover:text-[#241A12] px-1 font-bold"
-                        >
-                          +
-                        </button>
-                      </div>
+                      );
+                    })}
+
+                    {/* Empty cells after month end */}
+                    {Array.from({ length: trailingEmptyCount }).map((_, i) => (
+                      <div
+                        key={`empty-trailing-${i}`}
+                        className="bg-white min-h-[52px] sm:min-h-[64px] md:min-h-[72px]"
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Legend & Event Details Card */}
+              <div className="mt-3.5 flex flex-col gap-2.5">
+                {/* Legend Marks */}
+                <div className="p-3 rounded-md bg-[#241A12] border border-[#3B2D21] flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-4 sm:gap-5 text-[#FCF7ED]">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3.5 h-3.5 rounded-full bg-[#FCF7ED]" />
+                      <span className="font-medium text-[11px] sm:text-xs">
+                        {lang === "EN" ? "Open" : "通常営業"}
+                      </span>
                     </div>
-                  ))
-                )}
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-[#CE522A]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                      <span className="font-medium text-[#CE522A] text-[11px] sm:text-xs">
+                        {lang === "EN" ? "Closed" : "定休日"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-4 h-4 rounded bg-[#F2C24E] text-[#241A12] flex items-center justify-center font-black text-[9px] shadow-xs">★</span>
+                      <span className="font-bold text-[#F2C24E] text-[11px] sm:text-xs">
+                        {lang === "EN" ? "Event (Nov 21)" : "特別イベント (11/21)"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="text-[10.5px] text-[#A8957F] italic hidden sm:inline">
+                    {lang === "EN" ? "Click Nov 21 for event details" : "11/21をクリックでイベント詳細を表示"}
+                  </span>
+                </div>
+
+                {/* Event Description Card — Only appears when the user clicks the event date */}
+                {selectedCalendarDate.getFullYear() === calendarYear &&
+                  selectedCalendarDate.getMonth() === calendarMonthIndex &&
+                  selectedCalendarDate.getDate() === 21 && (
+                    <div className="p-3.5 sm:p-4 rounded-lg bg-[#2B1F16] border-2 border-[#F2C24E] text-[#FCF7ED] flex flex-col gap-2 shadow-lg">
+                      <div className="flex items-center justify-between gap-2 border-b border-[#3B2D21] pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-[#F2C24E] text-[#241A12] flex items-center justify-center font-black text-xs">★</span>
+                          <span className="font-bold text-xs sm:text-sm text-[#F2C24E] tracking-wide">
+                            {lang === "EN"
+                              ? "Saturday, Nov 21 · Public Cupping Session"
+                              : "11月21日（土）特別カッピングセッション"}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-semibold tracking-wider bg-[#F2C24E] text-[#241A12] px-2 py-0.5 rounded uppercase">
+                          {lang === "EN" ? "15:00 – 17:00" : "15:00〜17:00"}
+                        </span>
+                      </div>
+                      <p className="text-[12px] sm:text-[12.5px] leading-[19px] text-[#E8D8BF]">
+                        {lang === "EN"
+                          ? "Join our head roaster in Jingumae for an open cupping table tasting freshly arrived Indonesian micro-lots (Aceh Gayo, Toraja, and Bajawa Honey). Free admission, 12 seats available."
+                          : "神宮前店の焙煎士とともに、新豆のインドネシア・マイクロロット（アチェ・ガヨ、トラジャ、バジャワ・ハニー）の香味を比較・試飲できる特別な公開カッピング会です。参加無料・先着12名様。"}
+                      </p>
+                    </div>
+                  )}
               </div>
             </div>
 
-            {/* Drawer Bottom */}
-            <div className="border-t border-[#D8C7AC] pt-4 flex flex-col gap-3">
-              <div className="flex justify-between items-baseline text-sm">
-                <span className="text-[#6A5747]">{lang === "EN" ? "Subtotal" : "小計"}</span>
-                <span className="font-serif text-xl font-medium">¥{subtotal.toLocaleString()}</span>
-              </div>
+            {/* Modal Footer */}
+            <div className="px-4 sm:px-6 py-3 border-t border-[#3B2D21] bg-[#1A120C] flex items-center justify-end">
               <button
-                disabled={cart.length === 0}
-                onClick={() => {
-                  setIsCartOpen(false);
-                  setIsCheckoutModalOpen(true);
-                }}
-                className="w-full bg-[#CE522A] disabled:bg-stone-400 text-[#FCF7ED] py-3.5 rounded-full font-semibold text-sm hover:bg-[#b8431d] active:scale-95 transition-all shadow-md"
+                type="button"
+                onClick={() => setIsOpenHourModalOpen(false)}
+                className="px-5 py-2 rounded-full bg-[#FCF7ED] text-[#241A12] text-xs font-semibold hover:bg-[#CE522A] hover:text-[#FCF7ED] transition-colors"
               >
-                {lang === "EN" ? "Proceed to Checkout →" : "ご注文手続きへ進む →"}
-              </button>
-              <button
-                onClick={() => setIsCartOpen(false)}
-                className="text-xs text-center text-[#6A5747] hover:underline"
-              >
-                {lang === "EN" ? "Continue shopping" : "買い物を続ける"}
+                {lang === "EN" ? "Close" : "閉じる"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Checkout Mock Modal */}
-      {isCheckoutModalOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsCheckoutModalOpen(false);
-          }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-        >
-          <div className="bg-[#FCF7ED] text-[#241A12] w-full max-w-md rounded-xl p-6 sm:p-8 shadow-2xl relative border border-[#D8C7AC]">
-            <button
-              onClick={() => setIsCheckoutModalOpen(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-xl font-bold leading-none p-1"
-              aria-label="Close dialog"
-            >
-              ✕
-            </button>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full bg-[#CE522A]" />
-              <span className="text-[11px] font-bold tracking-[1.4px] text-[#6A5747] uppercase">
-                {lang === "EN" ? "SIMULATED CHECKOUT" : "ご注文確認（テストモード）"}
-              </span>
-            </div>
-            <h3 className="font-serif text-2xl font-medium mb-3">
-              {lang === "EN" ? "Order Summary" : "ご注文概要"}
-            </h3>
-            <div className="bg-[#F6EDDC] p-4 rounded-lg mb-4 text-xs space-y-2">
-              <div className="flex justify-between">
-                <span>{lang === "EN" ? `Items (${totalItemsCount})` : `商品点数 (${totalItemsCount}点)`}</span>
-                <span>¥{subtotal.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{lang === "EN" ? "Domestic Shipping" : "国内配送料"}</span>
-                <span>{freeShippingRemaining === 0 ? (lang === "EN" ? "FREE" : "無料") : "¥500"}</span>
-              </div>
-              <div className="flex justify-between font-bold border-t border-[#D8C7AC] pt-2 text-sm">
-                <span>{lang === "EN" ? "Total" : "合計金額"}</span>
-                <span>¥{(subtotal + (freeShippingRemaining === 0 ? 0 : 500)).toLocaleString()}</span>
-              </div>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                alert(
-                  lang === "EN"
-                    ? "Thank you for your order! We will freshly roast and dispatch your coffee within 48 hours."
-                    : "ご注文ありがとうございます！48時間以内に新鮮な豆を焙煎し、発送いたします。"
-                );
-                setCart([]);
-                setIsCheckoutModalOpen(false);
-              }}
-              className="flex flex-col gap-3 text-xs"
-            >
-              <input
-                type="text"
-                placeholder={lang === "EN" ? "Full Name" : "お名前（フルネーム）"}
-                required
-                className="p-3 bg-white border border-[#D8C7AC] rounded-md focus:outline-none"
-              />
-              <input
-                type="email"
-                placeholder={lang === "EN" ? "Email for Roasting Dispatch Note" : "メールアドレス（発送通知用）"}
-                required
-                className="p-3 bg-white border border-[#D8C7AC] rounded-md focus:outline-none"
-              />
-              <input
-                type="text"
-                placeholder={lang === "EN" ? "Shipping Address in Japan (Postal Code & Street)" : "お届け先ご住所（郵便番号・番地）"}
-                required
-                className="p-3 bg-white border border-[#D8C7AC] rounded-md focus:outline-none"
-              />
-              <button
-                type="submit"
-                className="w-full bg-[#241A12] text-[#FCF7ED] py-3.5 rounded-full font-semibold hover:bg-[#CE522A] transition-colors mt-2"
-              >
-                {lang === "EN" ? "Place Coffee Order (Test Mode)" : "注文を確定する（テスト注文）"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Visit / Inquiry Modal */}
-      {isVisitModalOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsVisitModalOpen(false);
-          }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-        >
-          <div className="bg-[#F6EDDC] text-[#241A12] w-full max-w-md rounded-xl p-6 sm:p-8 shadow-2xl relative border border-[#D8C7AC]">
-            <button
-              onClick={() => setIsVisitModalOpen(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-xl font-bold leading-none p-1"
-              aria-label="Close dialog"
-            >
-              ✕
-            </button>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full bg-[#CE522A]" />
-              <span className="text-[11px] font-bold tracking-[1.4px] text-[#6A5747] uppercase">
-                {lang === "EN" ? "VISIT & INQUIRIES" : "ご来店・お問い合わせ"}
-              </span>
-            </div>
-            <h3 className="font-serif text-2xl font-medium mb-3">
-              {lang === "EN" ? "Visit Lemari Coffee" : "ルマリコーヒーへのお問い合わせ"}
-            </h3>
-            <p className="text-xs text-[#6A5747] leading-relaxed mb-5">
-              {lang === "EN"
-                ? "We take walk-ins at both shops. For groups over 6, private cupping rituals, or bean wholesale accounts across Japan, leave us a note:"
-                : "両店舗ともご予約なしで気軽にお立ち寄りいただけます。6名様以上の団体利用、プライベートカッピング体験、卸売りのご相談はこちらからどうぞ："}
-            </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                alert(
-                  lang === "EN"
-                    ? "Thank you! Rani and the roastery team will get back to you within 24 hours."
-                    : "お問い合わせありがとうございます！担当者より24時間以内にご返信いたします。"
-                );
-                setIsVisitModalOpen(false);
-              }}
-              className="flex flex-col gap-3 text-xs"
-            >
-              <input
-                type="text"
-                placeholder={lang === "EN" ? "Your Name" : "お名前"}
-                required
-                className="p-3 bg-white/70 border border-[#D8C7AC] rounded-md focus:outline-none focus:border-[#241A12]"
-              />
-              <input
-                type="email"
-                placeholder={lang === "EN" ? "Email Address" : "メールアドレス"}
-                required
-                className="p-3 bg-white/70 border border-[#D8C7AC] rounded-md focus:outline-none focus:border-[#241A12]"
-              />
-              <select className="p-3 bg-white/70 border border-[#D8C7AC] rounded-md focus:outline-none focus:border-[#241A12]">
-                <option>{lang === "EN" ? "Café Visit / Group Booking" : "カフェご来店 / 団体予約"}</option>
-                <option>{lang === "EN" ? "Wholesale Roasted Beans" : "コーヒー豆の卸売り・仕入れ"}</option>
-                <option>{lang === "EN" ? "Private Hire & Events" : "店舗貸切・プライベートイベント"}</option>
-                <option>{lang === "EN" ? "Press & Media" : "取材・プレス関係"}</option>
-              </select>
-              <textarea
-                rows={3}
-                placeholder={lang === "EN" ? "Your message or preferred date..." : "お問い合わせ内容または希望日時..."}
-                className="p-3 bg-white/70 border border-[#D8C7AC] rounded-md focus:outline-none focus:border-[#241A12]"
-              ></textarea>
-              <button
-                type="submit"
-                className="w-full bg-[#241A12] text-[#FCF7ED] py-3 rounded-full font-semibold hover:bg-[#CE522A] transition-colors mt-2"
-              >
-                {lang === "EN" ? "Send Inquiry" : "送信する"}
-              </button>
-            </form>
           </div>
         </div>
       )}
