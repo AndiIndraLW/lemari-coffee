@@ -217,134 +217,154 @@ export default function Home() {
       <div className="w-full max-w-[1440px] flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.06)] bg-[#F6EDDC] overflow-hidden">
         
         {/* ================= 1. NAV ================= */}
-        <header className="sticky top-0 z-40 w-full h-[84px] md:h-[92px] px-5 sm:px-8 md:px-14 flex items-center justify-between bg-[#F6EDDC]/95 backdrop-blur-md border-b border-[#D8C7AC]/40 transition-colors">
-          {/* Brand */}
-          <a href="#" className="flex items-center gap-3 group">
-            <div className="relative w-8 h-8 md:w-9 md:h-9 flex-shrink-0 transition-transform group-hover:scale-105">
-              <Image
-                src="/assets/logo.png"
-                alt="Lemari Coffee Logo"
-                fill
-                sizes="(max-width: 768px) 32px, 36px"
-                className="object-contain"
-                priority
-              />
-            </div>
-            <span className="hidden sm:inline font-serif text-[18px] md:text-[19px] font-medium tracking-[1.4px] text-[#241A12]">
-              LEMARI COFFEE
-            </span>
-          </a>
-
-          {/* Desktop Nav Links */}
-          <nav className="hidden lg:flex items-center gap-7 xl:gap-8 text-[13px] text-[#6A5747] font-normal tracking-[0.6px]">
-            <a href="#philosophy" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Philosophy" : "コンセプト"}</a>
-            <a href="#beans" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Beans" : "珈琲豆"}</a>
-            <a href="#shop" className="hover:text-[#CE522A] transition-colors font-medium text-[#241A12] flex items-center gap-1.5">
-              <span>{lang === "EN" ? "Shop" : "オンラインショップ"}</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#CE522A]" />
-            </a>
-            <a href="#menu" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Menu" : "メニュー"}</a>
-            <a href="#space" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "The Space" : "空間"}</a>
-            <a href="#locator" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Location" : "店舗情報"}</a>
-          </nav>
-
-          {/* Nav Right */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 md:gap-4">
-            {/* Lang Switcher */}
-            <button
-              onClick={() => setLang(lang === "EN" ? "JP" : "EN")}
-              className="text-[12px] font-medium text-[#6A5747] tracking-[0.8px] hover:text-[#241A12] px-2.5 py-1.5 rounded border border-[#D8C7AC]/60 hover:border-[#241A12] transition-all"
-              title="Toggle Language"
-            >
-              {lang === "EN" ? "JP / EN" : "EN / JP"}
-            </button>
-
-            {/* Cart Button */}
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#D8C7AC]/80 hover:border-[#241A12] bg-[#FCF7ED] hover:bg-[#F6EDDC] text-[#241A12] text-[12.5px] font-medium transition-all group cursor-pointer shadow-2xs"
-              title="Shopping Cart"
-            >
-              <svg className="w-4 h-4 text-[#241A12] group-hover:text-[#CE522A] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-              <span className="hidden sm:inline font-serif">{lang === "EN" ? "Cart" : "かご"}</span>
-              {totalCartQuantity > 0 && (
-                <span className="min-w-[19px] h-[19px] px-1 rounded-full bg-[#CE522A] text-[#FCF7ED] text-[10.5px] font-bold flex items-center justify-center">
-                  {totalCartQuantity}
-                </span>
-              )}
-            </button>
-
-            {/* Visit the café Link */}
-            <a
-              href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden sm:inline-flex items-center gap-2 bg-[#241A12] text-[#FCF7ED] px-4 md:px-5 py-2 rounded-full text-[12px] font-medium tracking-[0.6px] hover:bg-[#CE522A] active:scale-95 transition-all shadow-sm"
-            >
-              <span>{lang === "EN" ? "Visit café" : "カフェへ"}</span>
-              <svg viewBox="0 0 13 13" className="w-[11px] h-[11px] fill-current" aria-hidden="true">
-                <path d="M3.666 3.263q-.13 .038-.241 .143-.112 .104-.15 .234-.05 .181 .026 .365 .079 .181 .235 .273 .079 .026 .181 .038 .158 .013 .612 .026h3.561l-2.275 2.275q-1.533 1.533-1.911 1.924-.375 .39-.403 .441-.102 .222-.013 .432 .092 .206 .298 .298 .21 .089 .432-.013 .051-.028 .441-.403 .391-.378 1.924-1.91l2.275-2.276v2.053q0 2.067 .026 2.146 .025 .168 .142 .273 .185 .181 .429 .162 .247-.019 .39-.229l.026-.025q.041-.051 .054-.168 .012-.143 .025-.638v-4.993l-.038-.089q-.025-.104-.117-.196-.093-.093-.197-.118l-.089-.038h-2.796q-2.781 0-2.847 .013z" />
-              </svg>
-            </a>
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 text-[#241A12] rounded-lg border border-[#D8C7AC]/70"
-              aria-label="Toggle Navigation Menu"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {mobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
-            </button>
-          </div>
-        </header>
-
-        {/* Mobile Dropdown Menu */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden w-full bg-[#F6EDDC] border-b border-[#D8C7AC] px-6 py-5 flex flex-col gap-4 text-[15px] font-medium transition-all">
-            <a href="#philosophy" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Philosophy" : "コンセプト"}</a>
-            <a href="#beans" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Beans & Origins" : "単一農園豆"}</a>
-            <a href="#shop" onClick={() => setMobileMenuOpen(false)} className="text-[#CE522A] font-semibold flex items-center justify-between">
-              <span>{lang === "EN" ? "Shop & Goods" : "オンラインショップ・雑貨"}</span>
-              <span className="text-xs bg-[#CE522A] text-[#FCF7ED] px-2 py-0.5 rounded-full font-bold">
-                {totalCartQuantity}
+        <header className="sticky top-0 z-40 w-full bg-[#F6EDDC]/95 backdrop-blur-md border-b border-[#D8C7AC]/40 transition-colors">
+          <div className="w-full h-[84px] md:h-[92px] px-5 sm:px-8 md:px-14 flex items-center justify-between">
+            {/* Brand */}
+            <a href="#" className="flex items-center gap-3 group">
+              <div className="relative w-8 h-8 md:w-9 md:h-9 flex-shrink-0 transition-transform group-hover:scale-105">
+                <Image
+                  src="/assets/logo.png"
+                  alt="Lemari Coffee Logo"
+                  fill
+                  sizes="(max-width: 768px) 32px, 36px"
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <span className="hidden sm:inline font-serif text-[18px] md:text-[19px] font-medium tracking-[1.4px] text-[#241A12]">
+                LEMARI COFFEE
               </span>
             </a>
-            <a href="#menu" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Signature Menu" : "カフェメニュー"}</a>
-            <a href="#space" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "The Space" : "空間・店舗"}</a>
-            <a href="#locator" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Store Location" : "店舗案内"}</a>
-            
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                setIsCartOpen(true);
-              }}
-              className="mt-1 w-full flex items-center justify-center gap-2 py-2.5 rounded-[3px] bg-[#CE522A] text-[#FCF7ED] text-xs font-semibold"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-              <span>{lang === "EN" ? `View Cart (${totalCartQuantity})` : `お買い物かごを見る (${totalCartQuantity})`}</span>
-            </button>
 
-            <a
-              href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center bg-[#241A12] text-[#FCF7ED] py-2.5 rounded-full text-xs font-semibold block hover:bg-[#CE522A] transition-colors"
-            >
-              {lang === "EN" ? "Visit the café" : "カフェへ行く"}
-            </a>
+            {/* Desktop Nav Links */}
+            <nav className="hidden lg:flex items-center gap-7 xl:gap-8 text-[13px] text-[#6A5747] font-normal tracking-[0.6px]">
+              <a href="#philosophy" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Philosophy" : "コンセプト"}</a>
+              <a href="#beans" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Beans" : "珈琲豆"}</a>
+              <a href="#shop" className="hover:text-[#CE522A] transition-colors font-medium text-[#241A12] flex items-center gap-1.5">
+                <span>{lang === "EN" ? "Shop" : "オンラインショップ"}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#CE522A]" />
+              </a>
+              <a href="#menu" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Menu" : "メニュー"}</a>
+              <a href="#space" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "The Space" : "空間"}</a>
+              <a href="#locator" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Location" : "店舗情報"}</a>
+            </nav>
+
+            {/* Nav Right */}
+            <div className="flex items-center gap-2.5 sm:gap-3.5 md:gap-4">
+              {/* Lang Switcher */}
+              <button
+                onClick={() => setLang(lang === "EN" ? "JP" : "EN")}
+                className="text-[12px] font-medium text-[#6A5747] tracking-[0.8px] hover:text-[#241A12] px-2.5 py-1.5 rounded border border-[#D8C7AC]/60 hover:border-[#241A12] transition-all cursor-pointer"
+                title="Toggle Language"
+              >
+                {lang === "EN" ? "JP / EN" : "EN / JP"}
+              </button>
+
+              {/* Cart Button */}
+              <button
+                onClick={() => setIsCartOpen(true)}
+                className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#D8C7AC]/80 hover:border-[#241A12] bg-[#FCF7ED] hover:bg-[#F6EDDC] text-[#241A12] text-[12.5px] font-medium transition-all group cursor-pointer shadow-2xs"
+                title="Shopping Cart"
+              >
+                <svg className="w-4 h-4 text-[#241A12] group-hover:text-[#CE522A] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+                <span className="hidden sm:inline font-serif">{lang === "EN" ? "Cart" : "かご"}</span>
+                {totalCartQuantity > 0 && (
+                  <span className="min-w-[19px] h-[19px] px-1 rounded-full bg-[#CE522A] text-[#FCF7ED] text-[10.5px] font-bold flex items-center justify-center">
+                    {totalCartQuantity}
+                  </span>
+                )}
+              </button>
+
+              {/* Visit the café Link */}
+              <a
+                href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:inline-flex items-center gap-2 bg-[#241A12] text-[#FCF7ED] px-4 md:px-5 py-2 rounded-full text-[12px] font-medium tracking-[0.6px] hover:bg-[#CE522A] active:scale-95 transition-all shadow-sm"
+              >
+                <span>{lang === "EN" ? "Visit café" : "カフェへ"}</span>
+                <svg viewBox="0 0 13 13" className="w-[11px] h-[11px] fill-current" aria-hidden="true">
+                  <path d="M3.666 3.263q-.13 .038-.241 .143-.112 .104-.15 .234-.05 .181 .026 .365 .079 .181 .235 .273 .079 .026 .181 .038 .158 .013 .612 .026h3.561l-2.275 2.275q-1.533 1.533-1.911 1.924-.375 .39-.403 .441-.102 .222-.013 .432 .092 .206 .298 .298 .21 .089 .432-.013 .051-.028 .441-.403 .391-.378 1.924-1.91l2.275-2.276v2.053q0 2.067 .026 2.146 .025 .168 .142 .273 .185 .181 .429 .162 .247-.019 .39-.229l.026-.025q.041-.051 .054-.168 .012-.143 .025-.638v-4.993l-.038-.089q-.025-.104-.117-.196-.093-.093-.197-.118l-.089-.038h-2.796q-2.781 0-2.847 .013z" />
+                </svg>
+              </a>
+
+              {/* Mobile Animated Hamburger Button */}
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="lg:hidden relative w-10 h-10 flex flex-col justify-center items-center rounded-lg border border-[#D8C7AC]/70 hover:border-[#241A12] bg-[#FCF7ED]/80 hover:bg-[#FCF7ED] transition-colors p-2 cursor-pointer focus:outline-hidden"
+                aria-label="Toggle Navigation Menu"
+                aria-expanded={mobileMenuOpen}
+              >
+                <div className="w-5 h-3.5 relative flex flex-col justify-between">
+                  <span
+                    className={`block h-[2px] w-full bg-[#241A12] rounded-full transform transition-all duration-300 ease-in-out origin-center ${
+                      mobileMenuOpen ? "translate-y-[6px] rotate-45" : ""
+                    }`}
+                  />
+                  <span
+                    className={`block h-[2px] w-full bg-[#241A12] rounded-full transition-all duration-200 ease-in-out ${
+                      mobileMenuOpen ? "opacity-0 scale-x-0" : "opacity-100"
+                    }`}
+                  />
+                  <span
+                    className={`block h-[2px] w-full bg-[#241A12] rounded-full transform transition-all duration-300 ease-in-out origin-center ${
+                      mobileMenuOpen ? "-translate-y-[6px] -rotate-45" : ""
+                    }`}
+                  />
+                </div>
+              </button>
+            </div>
           </div>
-        )}
+
+          {/* Animated Mobile Dropdown Menu */}
+          <div
+            className={`lg:hidden w-full overflow-hidden transition-all duration-300 ease-in-out ${
+              mobileMenuOpen
+                ? "max-h-[520px] opacity-100 border-t border-[#D8C7AC]/40"
+                : "max-h-0 opacity-0 border-t border-transparent pointer-events-none"
+            }`}
+          >
+            <div className="px-6 py-5 flex flex-col gap-4 text-[15px] font-medium bg-[#F6EDDC]">
+              <a href="#philosophy" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Philosophy" : "コンセプト"}</a>
+              <a href="#beans" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Beans & Origins" : "単一農園豆"}</a>
+              <a href="#shop" onClick={() => setMobileMenuOpen(false)} className="text-[#CE522A] font-semibold flex items-center justify-between hover:text-[#B34522] transition-colors">
+                <span>{lang === "EN" ? "Shop & Goods" : "オンラインショップ・雑貨"}</span>
+                <span className="text-xs bg-[#CE522A] text-[#FCF7ED] px-2 py-0.5 rounded-full font-bold">
+                  {totalCartQuantity}
+                </span>
+              </a>
+              <a href="#menu" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Signature Menu" : "カフェメニュー"}</a>
+              <a href="#space" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A] transition-colors">{lang === "EN" ? "The Space" : "空間・店舗"}</a>
+              <a href="#locator" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Store Location" : "店舗案内"}</a>
+              
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setIsCartOpen(true);
+                }}
+                className="mt-1 w-full flex items-center justify-center gap-2 py-2.5 rounded-[3px] bg-[#CE522A] hover:bg-[#B34522] text-[#FCF7ED] text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+                <span>{lang === "EN" ? `View Cart (${totalCartQuantity})` : `お買い物かごを見る (${totalCartQuantity})`}</span>
+              </button>
+
+              <a
+                href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full text-center bg-[#241A12] text-[#FCF7ED] py-2.5 rounded-full text-xs font-semibold block hover:bg-[#CE522A] transition-colors shadow-2xs"
+              >
+                {lang === "EN" ? "Visit the café" : "カフェへ行く"}
+              </a>
+            </div>
+          </div>
+        </header>
 
         {/* ================= 2. HERO ================= */}
         <section className="w-full px-5 sm:px-8 md:px-14 pt-8 md:pt-10 pb-16 md:pb-20 flex flex-col lg:flex-row gap-10 lg:gap-14 items-center">
