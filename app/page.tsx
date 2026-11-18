@@ -2,6 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import { products } from "./data/products";
+import { Product, CartItem, OrderDetails } from "./types/commerce";
+import CartDrawer from "./components/CartDrawer";
+import ProductQuickViewModal from "./components/ProductQuickViewModal";
+import CheckoutModal from "./components/CheckoutModal";
+import CartToast from "./components/CartToast";
 
 export default function Home() {
   const [lang, setLang] = useState<"EN" | "JP">("JP");
@@ -15,6 +21,108 @@ export default function Home() {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => new Date());
+
+  // Commerce & Cart State
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("lemari_cart");
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [
+      {
+        id: "bean-aceh-gayo-250g-whole",
+        productId: "bean-aceh-gayo",
+        name: "Aceh Gayo",
+        nameJP: "アチェ・ガヨ",
+        category: "beans",
+        price: 2400,
+        quantity: 1,
+        image: "/assets/revamp/bean-gayo.jpg",
+        grind: "Whole Bean (豆のまま)",
+        weight: "250g",
+        weightGrams: 250,
+      },
+    ];
+  });
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState<"shipping" | "pickup">("shipping");
+  const [shopFilter, setShopFilter] = useState<"all" | "beans" | "blends" | "goods">("all");
+  const [toast, setToast] = useState<{ visible: boolean; message: string; image?: string }>({
+    visible: false,
+    message: "",
+  });
+  const shelfScrollRef = React.useRef<HTMLDivElement>(null);
+
+  const handleShelfScroll = (direction: "left" | "right") => {
+    if (shelfScrollRef.current) {
+      const scrollAmount = direction === "left" ? -360 : 360;
+      shelfScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("lemari_cart", JSON.stringify(cart));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [cart]);
+
+  const totalCartQuantity = cart.reduce((acc, item) => acc + item.quantity, 0);
+
+  const handleAddToCart = (newItem: Omit<CartItem, "id">) => {
+    const compositeId = `${newItem.productId}-${newItem.weight || "std"}-${newItem.grind || "none"}`;
+    setCart((prevCart) => {
+      const existing = prevCart.find((item) => item.id === compositeId);
+      if (existing) {
+        return prevCart.map((item) =>
+          item.id === compositeId
+            ? { ...item, quantity: item.quantity + newItem.quantity }
+            : item
+        );
+      }
+      return [...prevCart, { ...newItem, id: compositeId }];
+    });
+
+    setToast({
+      visible: true,
+      message: `${lang === "EN" ? newItem.name : newItem.nameJP} (${newItem.weight || "250g"})`,
+      image: newItem.image,
+    });
+    setTimeout(() => {
+      setToast((prev) => ({ ...prev, visible: false }));
+    }, 3500);
+  };
+
+  const handleUpdateQuantity = (id: string, delta: number) => {
+    setCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.id === id) {
+            const nextQty = item.quantity + delta;
+            return nextQty > 0 ? { ...item, quantity: nextQty } : null;
+          }
+          return item;
+        })
+        .filter(Boolean) as CartItem[]
+    );
+  };
+
+  const handleRemoveItem = (id: string) => {
+    setCart((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleCompleteOrder = (_order: OrderDetails) => {
+    setCart([]);
+  };
 
   // Handle escape key and body scroll lock for modal
   useEffect(() => {
@@ -131,20 +239,41 @@ export default function Home() {
           <nav className="hidden lg:flex items-center gap-7 xl:gap-8 text-[13px] text-[#6A5747] font-normal tracking-[0.6px]">
             <a href="#philosophy" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Philosophy" : "コンセプト"}</a>
             <a href="#beans" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Beans" : "珈琲豆"}</a>
+            <a href="#shop" className="hover:text-[#CE522A] transition-colors font-medium text-[#241A12] flex items-center gap-1.5">
+              <span>{lang === "EN" ? "Shop" : "オンラインショップ"}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#CE522A]" />
+            </a>
             <a href="#menu" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Menu" : "メニュー"}</a>
             <a href="#space" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "The Space" : "空間"}</a>
             <a href="#locator" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Location" : "店舗情報"}</a>
           </nav>
 
           {/* Nav Right */}
-          <div className="flex items-center gap-3 sm:gap-4 md:gap-5">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 md:gap-4">
             {/* Lang Switcher */}
             <button
               onClick={() => setLang(lang === "EN" ? "JP" : "EN")}
-              className="text-[12px] font-medium text-[#6A5747] tracking-[0.8px] hover:text-[#241A12] px-2.5 py-1 rounded border border-[#D8C7AC]/60 hover:border-[#241A12] transition-all"
+              className="text-[12px] font-medium text-[#6A5747] tracking-[0.8px] hover:text-[#241A12] px-2.5 py-1.5 rounded border border-[#D8C7AC]/60 hover:border-[#241A12] transition-all"
               title="Toggle Language"
             >
               {lang === "EN" ? "JP / EN" : "EN / JP"}
+            </button>
+
+            {/* Cart Button */}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#D8C7AC]/80 hover:border-[#241A12] bg-[#FCF7ED] hover:bg-[#F6EDDC] text-[#241A12] text-[12.5px] font-medium transition-all group cursor-pointer shadow-2xs"
+              title="Shopping Cart"
+            >
+              <svg className="w-4 h-4 text-[#241A12] group-hover:text-[#CE522A] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              <span className="hidden sm:inline font-serif">{lang === "EN" ? "Cart" : "かご"}</span>
+              {totalCartQuantity > 0 && (
+                <span className="min-w-[19px] h-[19px] px-1 rounded-full bg-[#CE522A] text-[#FCF7ED] text-[10.5px] font-bold flex items-center justify-center">
+                  {totalCartQuantity}
+                </span>
+              )}
             </button>
 
             {/* Visit the café Link */}
@@ -152,10 +281,10 @@ export default function Home() {
               href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:inline-flex items-center gap-2 bg-[#241A12] text-[#FCF7ED] px-4 md:px-5 py-2.5 rounded-full text-[12.5px] font-medium tracking-[0.6px] hover:bg-[#CE522A] active:scale-95 transition-all shadow-sm"
+              className="hidden sm:inline-flex items-center gap-2 bg-[#241A12] text-[#FCF7ED] px-4 md:px-5 py-2 rounded-full text-[12px] font-medium tracking-[0.6px] hover:bg-[#CE522A] active:scale-95 transition-all shadow-sm"
             >
-              <span>{lang === "EN" ? "Visit the café" : "カフェへ行く"}</span>
-              <svg viewBox="0 0 13 13" className="w-[12px] h-[12px] fill-current" aria-hidden="true">
+              <span>{lang === "EN" ? "Visit café" : "カフェへ"}</span>
+              <svg viewBox="0 0 13 13" className="w-[11px] h-[11px] fill-current" aria-hidden="true">
                 <path d="M3.666 3.263q-.13 .038-.241 .143-.112 .104-.15 .234-.05 .181 .026 .365 .079 .181 .235 .273 .079 .026 .181 .038 .158 .013 .612 .026h3.561l-2.275 2.275q-1.533 1.533-1.911 1.924-.375 .39-.403 .441-.102 .222-.013 .432 .092 .206 .298 .298 .21 .089 .432-.013 .051-.028 .441-.403 .391-.378 1.924-1.91l2.275-2.276v2.053q0 2.067 .026 2.146 .025 .168 .142 .273 .185 .181 .429 .162 .247-.019 .39-.229l.026-.025q.041-.051 .054-.168 .012-.143 .025-.638v-4.993l-.038-.089q-.025-.104-.117-.196-.093-.093-.197-.118l-.089-.038h-2.796q-2.781 0-2.847 .013z" />
               </svg>
             </a>
@@ -182,15 +311,35 @@ export default function Home() {
           <div className="lg:hidden w-full bg-[#F6EDDC] border-b border-[#D8C7AC] px-6 py-5 flex flex-col gap-4 text-[15px] font-medium transition-all">
             <a href="#philosophy" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Philosophy" : "コンセプト"}</a>
             <a href="#beans" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Beans & Origins" : "単一農園豆"}</a>
+            <a href="#shop" onClick={() => setMobileMenuOpen(false)} className="text-[#CE522A] font-semibold flex items-center justify-between">
+              <span>{lang === "EN" ? "Shop & Goods" : "オンラインショップ・雑貨"}</span>
+              <span className="text-xs bg-[#CE522A] text-[#FCF7ED] px-2 py-0.5 rounded-full font-bold">
+                {totalCartQuantity}
+              </span>
+            </a>
             <a href="#menu" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Signature Menu" : "カフェメニュー"}</a>
             <a href="#space" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "The Space" : "空間・店舗"}</a>
             <a href="#locator" onClick={() => setMobileMenuOpen(false)} className="text-[#6A5747] hover:text-[#CE522A]">{lang === "EN" ? "Store Location" : "店舗案内"}</a>
+            
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setIsCartOpen(true);
+              }}
+              className="mt-1 w-full flex items-center justify-center gap-2 py-2.5 rounded-[3px] bg-[#CE522A] text-[#FCF7ED] text-xs font-semibold"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              <span>{lang === "EN" ? `View Cart (${totalCartQuantity})` : `お買い物かごを見る (${totalCartQuantity})`}</span>
+            </button>
+
             <a
               href="https://maps.app.goo.gl/zkKp8CNVTi1h7p9b6"
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setMobileMenuOpen(false)}
-              className="mt-2 w-full text-center bg-[#241A12] text-[#FCF7ED] py-2.5 rounded-full text-xs font-semibold block hover:bg-[#CE522A] transition-colors"
+              className="w-full text-center bg-[#241A12] text-[#FCF7ED] py-2.5 rounded-full text-xs font-semibold block hover:bg-[#CE522A] transition-colors"
             >
               {lang === "EN" ? "Visit the café" : "カフェへ行く"}
             </a>
@@ -377,159 +526,193 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ================= 5. FEATURED BEANS ================= */}
-        <section id="beans" className="scroll-mt-24 w-full px-5 sm:px-8 md:px-14 py-20 md:py-24 bg-[#E8D8BF] flex flex-col gap-10">
+        {/* ================= 5. ALL PRODUCTS (UNIFIED SLIDABLE SECTION) ================= */}
+        <section id="beans" className="relative scroll-mt-24 w-full px-5 sm:px-8 md:px-14 py-20 md:py-24 bg-[#E8D8BF] flex flex-col gap-8">
+          <div id="shop" className="absolute -top-24" />
+          
           {/* Header */}
-          <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-end gap-5">
+          <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="text-[11.5px] font-semibold text-[#6A5747] tracking-[1.6px] uppercase">
-                  {lang === "EN" ? "FEATURED BEANS & ORIGINS" : "今月の単一農園豆"}
-                </span>
               </div>
               <h2 className="font-serif text-[34px] sm:text-[40px] md:text-[44px] text-[#241A12] font-normal tracking-[-0.8px]">
-                {lang === "EN" ? "This month, from the archipelago." : "今月届いた、島々の収穫。"}
+                {lang === "EN" ? "All Products" : "全商品一覧"}
               </h2>
             </div>
-            <p className="text-[12.5px] text-[#6A5747] max-w-[340px] sm:text-right">
+            <p className="text-[12.5px] text-[#6A5747] max-w-[420px] md:text-right">
               {lang === "EN"
-                ? "Directly sourced from family micro-lots in Indonesia, profiled for pure extraction at our Tokyo brew bar."
-                : "インドネシア各地の家族経営農園から直接仕入れ、神宮前のカウンターにて香味を最大限に引き出しています。"}
+                ? "Direct-trade Indonesian micro-lots, café signature blends, Kasama ceramics, and curated pour-over gear."
+                : "インドネシア各地の単一農園豆、看板ブレンド、職人作陶の笠間焼、選りすぐりの抽出道具を揃えています。"}
             </p>
           </div>
 
-          {/* Bean Grid (3 items) */}
-          <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Bean 1: Aceh Gayo */}
-            <div className="bg-[#FCF7ED] rounded-[4px] overflow-hidden shadow-sm flex flex-col justify-between group hover:shadow-md transition-shadow">
-              <div>
-                <div className="relative w-full h-[260px] overflow-hidden">
-                  <Image
-                    src="/assets/revamp/bean-gayo.jpg"
-                    alt="Aceh Gayo Indonesian coffee beans"
-                    fill
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <span className="absolute top-4 left-4 bg-[#F2C24E] text-[#241A12] text-[10px] font-bold tracking-[1.3px] px-2.5 py-1 rounded-[2px]">
-                    {lang === "EN" ? "NEW HARVEST" : "新豆入荷"}
-                  </span>
-                </div>
-                <div className="p-6 sm:p-7 flex flex-col gap-3.5">
-                  <span className="text-[10.5px] font-semibold tracking-[1.4px] text-[#CE522A] uppercase">
-                    SUMATRA · 1,400–1,600 M
-                  </span>
-                  <h3 className="font-serif text-[24px] sm:text-[26px] font-medium text-[#241A12]">
-                    Aceh Gayo
-                  </h3>
-                  <span className="text-[12.5px] text-[#6A5747]">
-                    {lang === "EN" ? "Wet-hulled process (Giling Basah)" : "スマトラ式精製（ギリン・バサ）"}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {["Cedar", "Dark chocolate", "Brown sugar"].map((note) => (
-                      <span key={note} className="bg-[#E8D8BF] text-[#241A12] text-[11px] px-2.5 py-1 rounded-full">
-                        {note}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="px-6 sm:px-7 py-4 border-t border-[#E4D5BC] flex items-center justify-between text-xs text-[#6A5747]">
-                <span className="font-semibold text-[#241A12]">{lang === "EN" ? "Medium Roast" : "中煎り"}</span>
-                <span className="text-[11.5px] text-[#CE522A] font-medium">{lang === "EN" ? "Hand Drip & Espresso" : "ドリップ・エスプレッソ"}</span>
-              </div>
+          {/* Controls Bar: Filter Tabs + Slider Navigation */}
+          <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#C9B79A]/80 pb-4">
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {[
+                { id: "all", labelEN: "All Products", labelJP: "すべての商品" },
+                { id: "beans", labelEN: "Single Origins", labelJP: "単一農園豆" },
+                { id: "blends", labelEN: "Blends & Boxes", labelJP: "ブレンド・ギフト" },
+                { id: "goods", labelEN: "Ceramics & Gear", labelJP: "陶器・抽出器具・雑貨" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setShopFilter(tab.id as any)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    shopFilter === tab.id
+                      ? "bg-[#241A12] text-[#FCF7ED] shadow-xs"
+                      : "bg-[#FCF7ED]/80 text-[#6A5747] hover:text-[#241A12] hover:bg-[#FCF7ED]"
+                  }`}
+                >
+                  {lang === "EN" ? tab.labelEN : tab.labelJP}
+                </button>
+              ))}
             </div>
 
-            {/* Bean 2: Toraja Sulawesi */}
-            <div className="bg-[#FCF7ED] rounded-[4px] overflow-hidden shadow-sm flex flex-col justify-between group hover:shadow-md transition-shadow">
-              <div>
-                <div className="relative w-full h-[260px] overflow-hidden">
-                  <Image
-                    src="/assets/revamp/bean-toraja.jpg"
-                    alt="Toraja Sulawesi coffee harvest"
-                    fill
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-                <div className="p-6 sm:p-7 flex flex-col gap-3.5">
-                  <span className="text-[10.5px] font-semibold tracking-[1.4px] text-[#CE522A] uppercase">
-                    SULAWESI · 1,500 M
-                  </span>
-                  <h3 className="font-serif text-[24px] sm:text-[26px] font-medium text-[#241A12]">
-                    Toraja Sulawesi
-                  </h3>
-                  <span className="text-[12.5px] text-[#6A5747]">
-                    {lang === "EN" ? "Fully washed process" : "ウォッシュド精製"}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {["Blackberry", "Clove", "Cane sugar"].map((note) => (
-                      <span key={note} className="bg-[#E8D8BF] text-[#241A12] text-[11px] px-2.5 py-1 rounded-full">
-                        {note}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="px-6 sm:px-7 py-4 border-t border-[#E4D5BC] flex items-center justify-between text-xs text-[#6A5747]">
-                <span className="font-semibold text-[#241A12]">{lang === "EN" ? "Light-Medium Roast" : "浅中煎り"}</span>
-                <span className="text-[11.5px] text-[#CE522A] font-medium">{lang === "EN" ? "Filter Pour Over" : "ハンドドリップ推奨"}</span>
-              </div>
-            </div>
-
-            {/* Bean 3: Bajawa Flores */}
-            <div className="bg-[#FCF7ED] rounded-[4px] overflow-hidden shadow-sm flex flex-col justify-between group hover:shadow-md transition-shadow">
-              <div>
-                <div className="relative w-full h-[260px] overflow-hidden">
-                  <Image
-                    src="/assets/revamp/bean-flores.jpg"
-                    alt="Bajawa Flores natural process single lot coffee"
-                    fill
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <span className="absolute top-4 left-4 bg-[#F2C24E] text-[#241A12] text-[10px] font-bold tracking-[1.3px] px-2.5 py-1 rounded-[2px]">
-                    {lang === "EN" ? "SMALL LOT" : "マイクロロット"}
-                  </span>
-                </div>
-                <div className="p-6 sm:p-7 flex flex-col gap-3.5">
-                  <span className="text-[10.5px] font-semibold tracking-[1.4px] text-[#CE522A] uppercase">
-                    FLORES · 1,300 M
-                  </span>
-                  <h3 className="font-serif text-[24px] sm:text-[26px] font-medium text-[#241A12]">
-                    Bajawa Flores
-                  </h3>
-                  <span className="text-[12.5px] text-[#6A5747]">
-                    {lang === "EN" ? "Natural sun-dried process" : "ナチュラル天日乾燥精製"}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {["Jackfruit", "Cacao nib", "Honey"].map((note) => (
-                      <span key={note} className="bg-[#E8D8BF] text-[#241A12] text-[11px] px-2.5 py-1 rounded-full">
-                        {note}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="px-6 sm:px-7 py-4 border-t border-[#E4D5BC] flex items-center justify-between text-xs text-[#6A5747]">
-                <span className="font-semibold text-[#241A12]">{lang === "EN" ? "Light Roast" : "浅煎り"}</span>
-                <span className="text-[11.5px] text-[#CE522A] font-medium">{lang === "EN" ? "Seasonal Micro-Lot" : "季節限定マイクロロット"}</span>
+            {/* Slider Controls */}
+            <div className="flex items-center gap-3 self-end sm:self-auto">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleShelfScroll("left")}
+                  className="w-8 h-8 rounded-full bg-[#FCF7ED] hover:bg-[#241A12] text-[#241A12] hover:text-[#FCF7ED] border border-[#D8C7AC]/70 transition-all flex items-center justify-center shadow-2xs cursor-pointer"
+                  title="Scroll Left"
+                  aria-label="Previous products"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShelfScroll("right")}
+                  className="w-8 h-8 rounded-full bg-[#FCF7ED] hover:bg-[#241A12] text-[#241A12] hover:text-[#FCF7ED] border border-[#D8C7AC]/70 transition-all flex items-center justify-center shadow-2xs cursor-pointer"
+                  title="Scroll Right"
+                  aria-label="Next products"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Also On Shelf */}
-          <div className="w-full flex flex-wrap items-center gap-3 sm:gap-4 border-t border-[#C9B79A] pt-4 text-xs">
-            <span className="text-[10.5px] font-semibold tracking-[1.4px] text-[#6A5747] uppercase">
-              {lang === "EN" ? "ALSO ON THE SHELF" : "その他の取り扱い豆"}
-            </span>
-            <span className="font-serif italic text-[15px] text-[#241A12]">Java Preanger</span>
-            <span className="w-1 h-1 rounded-full bg-[#B8A385]" />
-            <span className="font-serif italic text-[15px] text-[#241A12]">Bali Kintamani</span>
-            <span className="w-1 h-1 rounded-full bg-[#B8A385]" />
-            <span className="font-serif italic text-[15px] text-[#241A12]">Papua Wamena</span>
-            <span className="w-1 h-1 rounded-full bg-[#B8A385]" />
-            <span className="font-serif italic text-[15px] text-[#241A12]">Sumbawa Tambora</span>
+          {/* Slidable Cards Container */}
+          <div
+            ref={shelfScrollRef}
+            className="w-full flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-4 pt-1"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
+            {products
+              .filter((p) => {
+                if (shopFilter === "all") return true;
+                if (shopFilter === "beans") return p.category === "beans" && p.subCategory === "single-origin";
+                if (shopFilter === "blends") return p.subCategory === "blend";
+                if (shopFilter === "goods") return p.category === "merch" && p.subCategory !== "blend";
+                return true;
+              })
+              .map((product) => (
+                <div
+                  key={product.id}
+                  className="w-[280px] sm:w-[320px] md:w-[340px] shrink-0 snap-start bg-[#FCF7ED] rounded-[4px] overflow-hidden shadow-sm flex flex-col justify-between group hover:shadow-md transition-shadow border border-[#D8C7AC]/40"
+                >
+                  <div
+                    className="cursor-pointer"
+                    onClick={() => setQuickViewProduct(product)}
+                  >
+                    <div className="relative w-full h-[230px] sm:h-[240px] overflow-hidden bg-[#E8D8BF]">
+                      <Image
+                        src={product.image}
+                        alt={lang === "EN" ? product.name : product.nameJP}
+                        fill
+                        sizes="340px"
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      {product.tag && (
+                        <span className="absolute top-3.5 left-3.5 bg-[#F2C24E] text-[#241A12] text-[9.5px] font-bold tracking-[1.2px] px-2.5 py-1 rounded-[2px] z-10">
+                          {lang === "EN" ? product.tag : product.tagJP || product.tag}
+                        </span>
+                      )}
+                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="bg-[#FCF7ED] text-[#241A12] text-xs font-semibold px-4 py-2 rounded-full shadow-md">
+                          {lang === "EN" ? "Quick View & Options" : "詳細・選択"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-5 flex flex-col gap-2.5">
+                      <span className="text-[10px] font-semibold tracking-[1.4px] text-[#CE522A] uppercase">
+                        {product.category === "beans"
+                          ? (lang === "EN" ? product.region : product.regionJP || product.region)
+                          : (lang === "EN" ? product.detail : product.detailJP || product.detail)}
+                      </span>
+                      <h3 className="font-serif text-[21px] sm:text-[22px] font-medium text-[#241A12] group-hover:text-[#CE522A] transition-colors leading-snug">
+                        {lang === "EN" ? product.name : product.nameJP}
+                      </h3>
+                      <p className="text-[12px] text-[#6A5747] line-clamp-2 leading-relaxed">
+                        {lang === "EN"
+                          ? (product.process || product.description)
+                          : (product.processJP || product.descriptionJP)}
+                      </p>
+                      {product.notes && product.notes.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {(lang === "EN" ? product.notes : product.notesJP || product.notes).slice(0, 3).map((note) => (
+                            <span key={note} className="bg-[#E8D8BF] text-[#241A12] text-[10.5px] px-2 py-0.5 rounded-full">
+                              {note}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="px-5 py-3.5 border-t border-[#E4D5BC] flex items-center justify-between">
+                    <div>
+                      <span className="font-serif text-[16px] font-bold text-[#241A12] block">
+                        ¥{product.price.toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-[#6A5747]">
+                        {product.availableWeights
+                          ? `250g · ${lang === "EN" ? "Whole bean / Drip" : "豆のまま / 粉"}`
+                          : (lang === "EN" ? "In stock" : "在庫あり")}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setQuickViewProduct(product)}
+                        className="text-xs text-[#6A5747] hover:text-[#241A12] px-2 py-1.5 rounded hover:bg-[#E8D8BF]/60 transition-colors cursor-pointer"
+                      >
+                        {lang === "EN" ? "Options" : "選択"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAddToCart({
+                            productId: product.id,
+                            name: product.name,
+                            nameJP: product.nameJP,
+                            category: product.category,
+                            price: product.price,
+                            quantity: 1,
+                            image: product.image,
+                            grind:
+                              product.category === "beans" || product.subCategory === "blend"
+                                ? lang === "EN" ? "Whole Bean" : "豆のまま"
+                                : undefined,
+                            weight: product.availableWeights ? "250g" : undefined,
+                            weightGrams: product.availableWeights ? 250 : undefined,
+                          });
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#CE522A] hover:bg-[#B34522] text-[#FCF7ED] rounded-[3px] text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                      >
+                        <span>+</span>
+                        <span>{lang === "EN" ? "Add" : "かごへ"}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
           </div>
         </section>
 
@@ -789,7 +972,9 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ================= 8. SOCIAL PROOF ================= */}
+
+
+        {/* ================= 9. SOCIAL PROOF ================= */}
         <section className="w-full px-5 sm:px-8 md:px-14 py-20 md:py-24 bg-[#E8D8BF] flex flex-col gap-12">
           {/* Header */}
           <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
@@ -1082,10 +1267,21 @@ export default function Home() {
             {/* Links Columns */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 sm:gap-14 text-[12.5px]">
               <div className="flex flex-col gap-2.5">
-                <span className="text-[10.5px] font-bold tracking-[1.5px] text-[#6B4A1F] uppercase">{lang === "EN" ? "DISCOVER" : "ブランド"}</span>
-                <a href="#philosophy" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Philosophy" : "私たちの哲学"}</a>
-                <a href="#menu" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Café menu" : "カフェメニュー"}</a>
-                <a href="#space" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "The space" : "店舗・喫茶空間"}</a>
+                <span className="text-[10.5px] font-bold tracking-[1.5px] text-[#6B4A1F] uppercase">{lang === "EN" ? "SHOP" : "オンラインショップ"}</span>
+                <a href="#beans" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Single origin beans" : "単一農園珈琲豆"}</a>
+                <a href="#shop" className="hover:text-[#CE522A] transition-colors">{lang === "EN" ? "Merchandise & teaware" : "陶器・オリジナルグッズ"}</a>
+                <button
+                  type="button"
+                  onClick={() => setIsCartOpen(true)}
+                  className="text-left hover:text-[#CE522A] transition-colors flex items-center gap-1.5"
+                >
+                  <span>{lang === "EN" ? "Cart" : "お買い物かご"}</span>
+                  {totalCartQuantity > 0 && (
+                    <span className="text-[10px] bg-[#CE522A] text-white px-1.5 py-0.2 rounded-full font-bold">
+                      {totalCartQuantity}
+                    </span>
+                  )}
+                </button>
               </div>
 
               <div className="flex flex-col gap-2.5">
@@ -1418,6 +1614,55 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* ================= CART DRAWER ================= */}
+      <CartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        items={cart}
+        onUpdateQuantity={handleUpdateQuantity}
+        onRemoveItem={handleRemoveItem}
+        onCheckout={() => {
+          setIsCartOpen(false);
+          setIsCheckoutOpen(true);
+        }}
+        lang={lang}
+        deliveryMethod={deliveryMethod}
+        setDeliveryMethod={setDeliveryMethod}
+      />
+
+      {/* ================= PRODUCT QUICK VIEW MODAL ================= */}
+      <ProductQuickViewModal
+        product={quickViewProduct}
+        isOpen={quickViewProduct !== null}
+        onClose={() => setQuickViewProduct(null)}
+        onAddToCart={handleAddToCart}
+        lang={lang}
+      />
+
+      {/* ================= CHECKOUT MODAL ================= */}
+      <CheckoutModal
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        items={cart}
+        deliveryMethod={deliveryMethod}
+        setDeliveryMethod={setDeliveryMethod}
+        onCompleteOrder={handleCompleteOrder}
+        lang={lang}
+      />
+
+      {/* ================= TOAST ================= */}
+      <CartToast
+        visible={toast.visible}
+        message={toast.message}
+        image={toast.image}
+        onOpenCart={() => {
+          setToast((prev) => ({ ...prev, visible: false }));
+          setIsCartOpen(true);
+        }}
+        onDismiss={() => setToast((prev) => ({ ...prev, visible: false }))}
+        lang={lang}
+      />
     </div>
   );
 }
