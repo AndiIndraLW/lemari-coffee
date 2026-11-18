@@ -230,7 +230,7 @@ export default function Home() {
                 priority
               />
             </div>
-            <span className="font-serif text-[18px] md:text-[19px] font-medium tracking-[1.4px] text-[#241A12]">
+            <span className="hidden sm:inline font-serif text-[18px] md:text-[19px] font-medium tracking-[1.4px] text-[#241A12]">
               LEMARI COFFEE
             </span>
           </a>
